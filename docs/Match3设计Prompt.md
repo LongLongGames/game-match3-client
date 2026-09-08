@@ -1,0 +1,13 @@
+- Unity6000.3.23 LTS
+- Cygames
+	- UniTask
+	- VContainer / DI
+	- R3（待定，是否过度设计）
+	- MessagePipe Pub / Sub（待定，是否过度设计）
+- UIToolkit，UI Document
+	- 为了HybridCLR支持 6.3.x LTS，暂时不用最新的 Panel Renderer
+- HybridCLR 8.14.1
+- AssetBundleFramework 1.0.3
+	- https://github.com/setsuodu/AssetBundleFramework/tree/main/Packages/com.setsuodu.assetbundleframework/Samples~/BasicExample/Scripts
+	- 参考Sample的ABManager，ResManger包装。
+- 基于原来的API，重新架构 first commit 版极简工程。使用上面规定的工具链和，设计一个2D Sprite Match3 基础项目框架。演示完整的休闲游戏 服务器、客户端 从【登录】到【提交分数】的完整交互流程。游戏从摄像机空场景单脚本GameBootstrap启动，从 HybridCLR 移交逻辑，UI 初始化，单机完成游戏后提交分数。如还有不明确的部分可以再敲定。

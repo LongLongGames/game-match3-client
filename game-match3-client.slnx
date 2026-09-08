@@ -1,3 +1,5 @@
 ﻿<Solution>
+  <Project Path="Bootstrap.csproj" />
+  <Project Path="HotUpdate.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
 </Solution>

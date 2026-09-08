@@ -1,0 +1,19 @@
+{
+    "name": "HotUpdate",
+    "rootNamespace": "HotUpdate",
+    "references": [
+        "UniTask",
+        "VContainer",
+        "Unity.UI.UIToolkit",
+        "UnityEngine.UIElementsModule"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
