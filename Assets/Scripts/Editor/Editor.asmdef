@@ -1,13 +1,15 @@
 {
-    "name": "HotUpdate",
-    "rootNamespace": "HotUpdate",
+    "name": "Editor",
+    "rootNamespace": "Editor",
     "references": [
-        "UniTask",
-        "VContainer",
+        "HotUpdate",
         "BakingSheet",
-        "BakingSheet.Json"
+        "BakingSheet.Json",
+        "BakingSheet.Excel"
     ],
-    "includePlatforms": [],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
