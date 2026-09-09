@@ -1,5 +1,14 @@
 {
   "dependencies": {
+    "com.cathei.bakingsheet": {
+      "version": "4.1.3",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.nuget.newtonsoft-json": "3.0.2"
+      },
+      "url": "https://package.openupm.com"
+    },
     "com.code-philosophy.hybridclr": {
       "version": "8.14.1",
       "depth": 0,
@@ -45,6 +54,13 @@
       "dependencies": {
         "com.unity.modules.uielements": "1.0.0"
       }
+    },
+    "com.unity.nuget.newtonsoft-json": {
+      "version": "3.2.2",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://packages.unity.com"
     },
     "com.unity.test-framework": {
       "version": "1.6.0",

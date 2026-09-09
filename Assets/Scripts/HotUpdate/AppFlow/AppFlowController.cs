@@ -10,8 +10,7 @@ using HotUpdate.Gameplay;
 namespace HotUpdate.AppFlow
 {
     /// <summary>
-    /// 全局流程控制。UI 通过 Handler 回调跳转，不互相构造注入。
-    /// 演示完整链路：CheckUpdate → Login → Home → Game → 提交分数 → Home
+    /// 全局流程：CheckUpdate → Login → Home(状态) → Game(通关上报) → Home
     /// </summary>
     public class AppFlowController : IAppFlow
     {
@@ -25,6 +24,8 @@ namespace HotUpdate.AppFlow
         readonly IPlayerService _player;
 
         bool _handlersBound;
+        int _pendingMapId = 1;
+        int _pendingLevelId = 1;
 
         public AppFlowController(
             IVersionService version,
@@ -70,6 +71,17 @@ namespace HotUpdate.AppFlow
 
             _ui.SetStartGameHandler(async () =>
             {
+                if (!_player.TryGetNextPlayableLevel(out var mapId, out var levelId))
+                {
+                    if (_player.Energy <= 0)
+                        await _ui.ShowErrorAsync("体力不足，请稍后再试");
+                    else
+                        await _ui.ShowErrorAsync("关卡未解锁");
+                    return;
+                }
+
+                _pendingMapId = mapId;
+                _pendingLevelId = levelId;
                 await GotoAsync(AppState.Game);
             });
 
@@ -148,18 +160,33 @@ namespace HotUpdate.AppFlow
         async UniTask OnHomeAsync(CancellationToken ct)
         {
             await _player.RefreshProfileAsync(ct);
+            await _player.RefreshStateAsync(mapId: 1, ct);
+            _ui.SetHomeStatus(
+                _player.Energy,
+                _player.EnergyMax,
+                _player.Gold,
+                _player.UnlockedMap,
+                _player.State?.cleared_on_map ?? 0,
+                _player.State?.levels_per_map ?? LevelConfigTable.LevelsPerMap);
             await _ui.ShowPanelAsync(UIPanel.Home, ct);
         }
 
         async UniTask OnGameAsync(CancellationToken ct)
         {
+            var cfg = LevelConfigTable.Get(_pendingMapId, _pendingLevelId);
             await _ui.ShowPanelAsync(UIPanel.Game, ct);
-            var result = await _match3.PlayAsync(ct);
+            _ui.SetGameStatus(cfg.MapId, cfg.LevelId, cfg.MaxSteps);
+
+            var result = await _match3.PlayAsync(cfg, ct);
             if (result.Success)
             {
-                Debug.Log($"[AppFlow] Score={result.Score}");
+                Debug.Log($"[AppFlow] clear map={result.MapId} lv={result.LevelId} stars={result.Stars} steps={result.Steps} score={result.Score}");
+                await _player.ClearLevelAsync(
+                    result.MapId, result.LevelId, result.Stars, result.Steps, result.Score, ct);
+                // 排行榜仍可按本局分数提交
                 await _leaderboard.SubmitScoreAsync(result.Score, ct);
             }
+
             await GotoAsync(AppState.Home, ct);
         }
     }

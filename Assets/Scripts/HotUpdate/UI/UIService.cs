@@ -24,6 +24,10 @@ namespace HotUpdate.UI
         Func<UniTask> _onStartGame;
         Action _onLogout;
 
+        int _energy = 30, _energyMax = 30, _unlockedMap = 1, _clearedOnMap, _levelsPerMap = 20;
+        long _gold;
+        int _gameMapId = 1, _gameLevelId = 1, _gameMaxSteps = 20;
+
         public UIService(IAuthService auth)
         {
             _auth = auth;
@@ -33,6 +37,23 @@ namespace HotUpdate.UI
         public void SetOfflineEnterHandler(Func<UniTask> handler) => _onOfflineEnter = handler;
         public void SetStartGameHandler(Func<UniTask> handler) => _onStartGame = handler;
         public void SetLogoutHandler(Action handler) => _onLogout = handler;
+
+        public void SetHomeStatus(int energy, int energyMax, long gold, int unlockedMap, int clearedOnMap, int levelsPerMap)
+        {
+            _energy = energy;
+            _energyMax = energyMax;
+            _gold = gold;
+            _unlockedMap = unlockedMap;
+            _clearedOnMap = clearedOnMap;
+            _levelsPerMap = levelsPerMap;
+        }
+
+        public void SetGameStatus(int mapId, int levelId, int maxSteps)
+        {
+            _gameMapId = mapId;
+            _gameLevelId = levelId;
+            _gameMaxSteps = maxSteps;
+        }
 
         public async UniTask ShowPanelAsync(UIPanel panel, CancellationToken ct = default)
         {
@@ -209,7 +230,17 @@ namespace HotUpdate.UI
             title.style.unityTextAlign = TextAnchor.MiddleCenter;
             box.Add(title);
 
-            var start = new Button { text = "开始游戏" };
+            var status = new Label(
+                $"体力 {_energy}/{_energyMax}    金币 {_gold}\n" +
+                $"地图解锁至 {_unlockedMap}    本图进度 {_clearedOnMap}/{_levelsPerMap}");
+            status.style.fontSize = 18;
+            status.style.marginTop = 16;
+            status.style.unityTextAlign = TextAnchor.MiddleCenter;
+            status.style.whiteSpace = WhiteSpace.Normal;
+            status.style.color = new Color(0.85f, 0.9f, 1f, 1f);
+            box.Add(status);
+
+            var start = new Button { text = "开始下一关" };
             start.style.marginTop = 24;
             start.style.width = 240;
             start.style.height = 56;
@@ -230,7 +261,8 @@ namespace HotUpdate.UI
 
         void BuildGame()
         {
-            var label = new Label("游戏中...\n（Match3 逻辑运行中，结束后自动提交分数）");
+            var label = new Label(
+                $"对局中\n地图 {_gameMapId}  关卡 {_gameLevelId}\n最大步数 {_gameMaxSteps}\n\n（Mock Match3，结束后自动上报通关）");
             StyleCenter(label);
             label.style.whiteSpace = WhiteSpace.Normal;
             _root.Add(label);

@@ -1,10 +1,14 @@
 using System;
-using System.Text;
 using System.Collections;
+using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UI;
 
+/// <summary>
+/// 联调脚本：登录 → 资料 → 状态(体力/金币/地图) → 通关 → 排行榜。
+/// 挂到 TestAPI 场景任意物体上即可；Start 自动跑一遍。
+/// </summary>
 public class TestAPI : MonoBehaviour
 {
     [Header("服务器地址")]
@@ -22,9 +26,16 @@ public class TestAPI : MonoBehaviour
     public int testScore = 100;
     public string nickname = "UnityPlayer";
 
+    [Header("通关测试")]
+    public int mapId = 1;
+    public int levelId = 1;
+    public int stars = 3;
+    public int steps = 12;
+    public long levelScore = 3500;
+
     [Header("UI（可选）")]
-    public Text logText;          // 拖一个 Text 显示日志
-    public Button btnRunAll;      // 一键跑完整流程
+    public Text logText;
+    public Button btnRunAll;
 
     private string accessToken;
 
@@ -37,14 +48,10 @@ public class TestAPI : MonoBehaviour
         StartCoroutine(RunFullFlow());
     }
 
-    /// <summary>
-    /// 完整测试流程
-    /// </summary>
     public IEnumerator RunFullFlow()
     {
         Log("===== 开始 API 测试 =====");
 
-        // 1. 登录拿 Token
         yield return Login();
         if (string.IsNullOrEmpty(accessToken))
         {
@@ -52,17 +59,15 @@ public class TestAPI : MonoBehaviour
             yield break;
         }
 
-        // 2. 获取/创建玩家资料
         yield return GetProfile();
-
-        // 3. 提交分数
+        yield return GetState(mapId);
+        yield return ClearLevel(mapId, levelId, stars, steps, levelScore);
+        yield return GetState(mapId);
         yield return SubmitScore(testScore);
-
-        // 4. 查排行榜 Top
         yield return GetTop(5);
-
-        // 5. 查自己排名
         yield return GetMyRank();
+        yield return CheatRefillEnergy();
+        yield return GetState(mapId);
 
         Log("===== 全部完成 =====");
     }
@@ -72,65 +77,103 @@ public class TestAPI : MonoBehaviour
     IEnumerator Login()
     {
         Log("1. MP 登录...");
-
         var body = new LoginRequest
         {
             provider = "official",
             app_id = "test_app",
             device_id = deviceId,
-            auth_payload = new AuthPayload
-            {
-                username = username,
-                password = password
-            }
+            auth_payload = new AuthPayload { username = username, password = password }
         };
-
         string json = JsonUtility.ToJson(body);
-        using (var req = new UnityWebRequest($"{mpBaseUrl}/api/v1/auth/login", "POST"))
+        string url = $"{mpBaseUrl}/api/v1/auth/login";
+
+        using (var req = NewJsonPost(url, json, auth: false))
         {
-            byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
-            req.uploadHandler = new UploadHandlerRaw(bodyRaw);
-            req.downloadHandler = new DownloadHandlerBuffer();
-            req.SetRequestHeader("Content-Type", "application/json");
-
             yield return req.SendWebRequest();
-
             if (req.result != UnityWebRequest.Result.Success)
             {
                 Log($"登录失败: {req.error}\n{req.downloadHandler.text}");
                 yield break;
             }
-
             var resp = JsonUtility.FromJson<LoginResponse>(req.downloadHandler.text);
-            accessToken = resp.access_token;
-            Log($"✅ 登录成功, token 前 20 位: {accessToken?.Substring(0, Math.Min(20, accessToken.Length))}...");
+            accessToken = resp != null ? resp.access_token : null;
+            Log(string.IsNullOrEmpty(accessToken) ? "❌ 无 token" : "✅ 登录成功");
         }
     }
 
     IEnumerator GetProfile()
     {
         Log("2. 获取玩家资料...");
-
         string url = $"{gameBaseUrl}/api/v1/user/profile?game_id={gameId}";
         using (var req = UnityWebRequest.Get(url))
         {
             req.SetRequestHeader("Authorization", $"Bearer {accessToken}");
             yield return req.SendWebRequest();
-
             if (req.result != UnityWebRequest.Result.Success)
-            {
-                Log($"获取资料失败: {req.error}\n{req.downloadHandler.text}");
-                yield break;
-            }
+                Log($"资料失败: {req.error}\n{req.downloadHandler.text}");
+            else
+                Log($"✅ 资料: {req.downloadHandler.text}");
+        }
+    }
 
-            Log($"✅ 资料: {req.downloadHandler.text}");
+    IEnumerator GetState(int map)
+    {
+        Log($"3. 玩家状态 map={map}（体力/金币/进度）...");
+        string url = $"{gameBaseUrl}/api/v1/user/state?game_id={gameId}&map_id={map}";
+        using (var req = UnityWebRequest.Get(url))
+        {
+            req.SetRequestHeader("Authorization", $"Bearer {accessToken}");
+            yield return req.SendWebRequest();
+            if (req.result != UnityWebRequest.Result.Success)
+                Log($"状态失败: {req.error}\n{req.downloadHandler.text}");
+            else
+                Log($"✅ 状态: {req.downloadHandler.text}");
+        }
+    }
+
+    IEnumerator ClearLevel(int map, int level, int star, int step, long score)
+    {
+        Log($"4. 通关 map={map} level={level} stars={star} steps={step}...");
+        var body = new ClearLevelRequest
+        {
+            game_id = gameId,
+            map_id = map,
+            level_id = level,
+            stars = star,
+            steps = step,
+            score = score
+        };
+        string json = JsonUtility.ToJson(body);
+        string url = $"{gameBaseUrl}/api/v1/user/level/clear";
+        using (var req = NewJsonPost(url, json, auth: true))
+        {
+            yield return req.SendWebRequest();
+            if (req.result != UnityWebRequest.Result.Success)
+                Log($"通关失败: {req.error}\n{req.downloadHandler.text}");
+            else
+                Log($"✅ 通关: {req.downloadHandler.text}");
+        }
+    }
+
+    IEnumerator CheatRefillEnergy()
+    {
+        Log("5b. 开发回满体力...");
+        var body = new CheatRefillRequest { game_id = gameId };
+        string json = JsonUtility.ToJson(body);
+        string url = $"{gameBaseUrl}/api/v1/user/energy/cheat-refill";
+        using (var req = NewJsonPost(url, json, auth: true))
+        {
+            yield return req.SendWebRequest();
+            if (req.result != UnityWebRequest.Result.Success)
+                Log($"回满失败: {req.error}\n{req.downloadHandler.text}");
+            else
+                Log($"✅ 回满: {req.downloadHandler.text}");
         }
     }
 
     IEnumerator SubmitScore(int score)
     {
-        Log($"3. 提交分数 {score}...");
-
+        Log("5. 提交排行榜分数...");
         var body = new ScoreRequest
         {
             game_id = gameId,
@@ -138,71 +181,69 @@ public class TestAPI : MonoBehaviour
             score = score,
             nickname = nickname
         };
-
         string json = JsonUtility.ToJson(body);
-        using (var req = new UnityWebRequest($"{gameBaseUrl}/api/v1/leaderboard/score", "POST"))
+        string url = $"{gameBaseUrl}/api/v1/leaderboard/score";
+        using (var req = NewJsonPost(url, json, auth: true))
         {
-            byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
-            req.uploadHandler = new UploadHandlerRaw(bodyRaw);
-            req.downloadHandler = new DownloadHandlerBuffer();
-            req.SetRequestHeader("Content-Type", "application/json");
-            req.SetRequestHeader("Authorization", $"Bearer {accessToken}");
-
             yield return req.SendWebRequest();
-
             if (req.result != UnityWebRequest.Result.Success)
-            {
-                Log($"提交分数失败: {req.error}\n{req.downloadHandler.text}");
-                yield break;
-            }
-
-            Log($"✅ 提交结果: {req.downloadHandler.text}");
+                Log($"提交失败: {req.error}\n{req.downloadHandler.text}");
+            else
+                Log($"✅ 提交: {req.downloadHandler.text}");
         }
     }
 
-    IEnumerator GetTop(int limit = 50)
+    IEnumerator GetTop(int limit)
     {
-        Log($"4. 查排行榜 Top{limit}...");
-
+        Log("6. 查排行榜 Top...");
         string url = $"{gameBaseUrl}/api/v1/leaderboard/top?game_id={gameId}&board_id={boardId}&limit={limit}";
         using (var req = UnityWebRequest.Get(url))
         {
-            // 排行榜公开接口，可不带 Token
             yield return req.SendWebRequest();
-
             if (req.result != UnityWebRequest.Result.Success)
-            {
-                Log($"查排行榜失败: {req.error}\n{req.downloadHandler.text}");
-                yield break;
-            }
-
-            Log($"✅ 排行榜: {req.downloadHandler.text}");
+                Log($"排行榜失败: {req.error}\n{req.downloadHandler.text}");
+            else
+                Log($"✅ 排行榜: {req.downloadHandler.text}");
         }
     }
 
     IEnumerator GetMyRank()
     {
-        Log("5. 查自己排名...");
-
+        Log("7. 查自己排名...");
         string url = $"{gameBaseUrl}/api/v1/leaderboard/me?game_id={gameId}&board_id={boardId}";
         using (var req = UnityWebRequest.Get(url))
         {
             req.SetRequestHeader("Authorization", $"Bearer {accessToken}");
             yield return req.SendWebRequest();
-
             if (req.result != UnityWebRequest.Result.Success)
-            {
-                Log($"查自己排名失败: {req.error}\n{req.downloadHandler.text}");
-                yield break;
-            }
-
-            Log($"✅ 我的排名: {req.downloadHandler.text}");
+                Log($"自己排名失败: {req.error}\n{req.downloadHandler.text}");
+            else
+                Log($"✅ 我的排名: {req.downloadHandler.text}");
         }
     }
 
     #endregion
 
-    #region 数据类（JsonUtility 用）
+    UnityWebRequest NewJsonPost(string url, string json, bool auth)
+    {
+        var req = new UnityWebRequest(url, "POST");
+        byte[] raw = Encoding.UTF8.GetBytes(json);
+        req.uploadHandler = new UploadHandlerRaw(raw);
+        req.downloadHandler = new DownloadHandlerBuffer();
+        req.SetRequestHeader("Content-Type", "application/json");
+        if (auth && !string.IsNullOrEmpty(accessToken))
+            req.SetRequestHeader("Authorization", $"Bearer {accessToken}");
+        return req;
+    }
+
+    void Log(string msg)
+    {
+        Debug.Log(msg);
+        if (logText != null)
+            logText.text += msg + "\n";
+    }
+
+    #region 数据类（JsonUtility）
 
     [Serializable]
     public class LoginRequest
@@ -225,7 +266,6 @@ public class TestAPI : MonoBehaviour
     {
         public string access_token;
         public string refresh_token;
-        // 其他字段按需加
     }
 
     [Serializable]
@@ -237,12 +277,22 @@ public class TestAPI : MonoBehaviour
         public string nickname;
     }
 
-    #endregion
-
-    void Log(string msg)
+    [Serializable]
+    public class ClearLevelRequest
     {
-        Debug.Log(msg);
-        if (logText != null)
-            logText.text += msg + "\n";
+        public string game_id;
+        public int map_id;
+        public int level_id;
+        public int stars;
+        public int steps;
+        public long score;
     }
+
+    [Serializable]
+    public class CheatRefillRequest
+    {
+        public string game_id;
+    }
+
+    #endregion
 }
