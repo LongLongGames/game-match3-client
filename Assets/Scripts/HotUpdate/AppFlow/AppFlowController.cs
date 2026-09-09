@@ -6,6 +6,7 @@ using HotUpdate.Auth;
 using HotUpdate.Services;
 using HotUpdate.UI;
 using HotUpdate.Gameplay;
+using HotUpdate.Config;
 
 namespace HotUpdate.AppFlow
 {
@@ -143,6 +144,17 @@ namespace HotUpdate.AppFlow
             {
                 await GotoAsync(AppState.Error, ct);
                 return;
+            }
+
+            // 导表产物 → 内存表（失败不阻断登录，但进关会打错误日志）
+            try
+            {
+                await ConfigLoader.LoadDefaultAsync();
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                Debug.LogError("[AppFlow] 配置加载失败，关卡将缺少表数据");
             }
 
             _auth.TryRestoreToken();

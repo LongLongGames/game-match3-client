@@ -1,21 +1,20 @@
 using System;
+using System.Collections.Generic;
+using HotUpdate.Config;
+using UnityEngine;
 
 namespace HotUpdate.Gameplay
 {
     /// <summary>
-    /// 客户端本地关卡静态配置（弱联网：配置不下发，服务器只存进度）。
-    /// 后续可换成 ScriptableObject / 热更 JSON。
+    /// 关卡静态配置（运行时从导表产物填充，不再用公式 mock）。
     /// </summary>
     [Serializable]
     public class LevelConfig
     {
         public int MapId;
         public int LevelId;
-        /// <summary>本关允许的最大步数（用于 mock 星级）</summary>
         public int MaxSteps;
-        /// <summary>3 星步数阈值</summary>
         public int StepsFor3Stars;
-        /// <summary>2 星步数阈值</summary>
         public int StepsFor2Stars;
         public int BoardWidth = 8;
         public int BoardHeight = 8;
@@ -23,35 +22,87 @@ namespace HotUpdate.Gameplay
         public int GoalValue = 1000;
     }
 
+    /// <summary>
+    /// 关卡表：由 ConfigLoader 在启动时 Initialize，之后 Get 只查内存。
+    /// </summary>
     public static class LevelConfigTable
     {
         public const int LevelsPerMap = 20;
 
+        static readonly Dictionary<(int mapId, int levelId), LevelConfig> _byKey = new();
+        static bool _initialized;
+
+        public static bool IsInitialized => _initialized;
+        public static int Count => _byKey.Count;
+
         /// <summary>
-        /// 按 map/level 生成占位配置。真实项目改为读表。
+        /// 用 BakingSheet 容器填充表。应在进 Home/Game 之前调用一次。
+        /// </summary>
+        public static void Initialize(GameSheetContainer container)
+        {
+            _byKey.Clear();
+            _initialized = false;
+
+            if (container?.Level == null)
+            {
+                Debug.LogError("[LevelConfigTable] container.Level 为空，关卡表未加载");
+                return;
+            }
+
+            foreach (var row in container.Level)
+            {
+                if (row == null) continue;
+                var cfg = new LevelConfig
+                {
+                    MapId = row.MapId,
+                    LevelId = row.LevelId,
+                    MaxSteps = row.MaxSteps,
+                    StepsFor3Stars = row.StepsFor3Stars,
+                    StepsFor2Stars = row.StepsFor2Stars,
+                    BoardWidth = row.BoardWidth > 0 ? row.BoardWidth : 8,
+                    BoardHeight = row.BoardHeight > 0 ? row.BoardHeight : 8,
+                    Goal = string.IsNullOrEmpty(row.Goal) ? "score" : row.Goal,
+                    GoalValue = row.GoalValue
+                };
+                _byKey[(cfg.MapId, cfg.LevelId)] = cfg;
+            }
+
+            _initialized = _byKey.Count > 0;
+            Debug.Log($"[LevelConfigTable] loaded {_byKey.Count} levels");
+        }
+
+        /// <summary>
+        /// 按 map/level 取配置。未初始化或缺失时打错误日志并返回安全占位（避免空引用崩流程）。
         /// </summary>
         public static LevelConfig Get(int mapId, int levelId)
         {
-            // 难度随关卡略增
-            var maxSteps = 30 - Math.Min(levelId, 15);
+            if (_byKey.TryGetValue((mapId, levelId), out var cfg))
+                return cfg;
+
+            Debug.LogError(
+                $"[LevelConfigTable] 缺少关卡配置 map={mapId} level={levelId} " +
+                $"(initialized={_initialized}, count={_byKey.Count})。请检查 Excel 导表与 Level.json。");
+
             return new LevelConfig
             {
                 MapId = mapId,
                 LevelId = levelId,
-                MaxSteps = Math.Max(12, maxSteps),
-                StepsFor3Stars = Math.Max(8, maxSteps - 8),
-                StepsFor2Stars = Math.Max(10, maxSteps - 4),
+                MaxSteps = 30,
+                StepsFor3Stars = 20,
+                StepsFor2Stars = 25,
                 BoardWidth = 8,
                 BoardHeight = 8,
                 Goal = "score",
-                GoalValue = 800 + levelId * 100 + mapId * 200
+                GoalValue = 1000
             };
         }
 
-        /// <summary>根据步数估算星级（mock / 客户端自判，服务器仍可再校验）</summary>
+        public static bool TryGet(int mapId, int levelId, out LevelConfig cfg)
+            => _byKey.TryGetValue((mapId, levelId), out cfg);
+
         public static int CalcStars(LevelConfig cfg, int steps, bool cleared)
         {
-            if (!cleared) return 0;
+            if (!cleared || cfg == null) return 0;
             if (steps <= cfg.StepsFor3Stars) return 3;
             if (steps <= cfg.StepsFor2Stars) return 2;
             return 1;
