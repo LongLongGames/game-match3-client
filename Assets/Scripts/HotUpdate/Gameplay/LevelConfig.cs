@@ -27,7 +27,7 @@ namespace HotUpdate.Gameplay
     /// </summary>
     public static class LevelConfigTable
     {
-        public const int LevelsPerMap = 20;
+        public const int LevelsPerMap = 10;
 
         static readonly Dictionary<(int mapId, int levelId), LevelConfig> _byKey = new();
         static bool _initialized;
