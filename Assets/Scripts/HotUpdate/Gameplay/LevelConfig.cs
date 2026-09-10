@@ -6,7 +6,7 @@ using UnityEngine;
 namespace HotUpdate.Gameplay
 {
     /// <summary>
-    /// 关卡静态配置（运行时从导表产物填充，不再用公式 mock）。
+    /// 关卡静态配置（运行时从 ExcelConfigCompiler 二进制表填充）。
     /// </summary>
     [Serializable]
     public class LevelConfig
@@ -36,22 +36,21 @@ namespace HotUpdate.Gameplay
         public static int Count => _byKey.Count;
 
         /// <summary>
-        /// 用 BakingSheet 容器填充表。应在进 Home/Game 之前调用一次。
+        /// 用 ExcelConfigCompiler 生成的 Level 行填充。应在进 Home/Game 之前调用一次。
         /// </summary>
-        public static void Initialize(GameSheetContainer container)
+        public static void Initialize(Level[] rows)
         {
             _byKey.Clear();
             _initialized = false;
 
-            if (container?.Level == null)
+            if (rows == null || rows.Length == 0)
             {
-                Debug.LogError("[LevelConfigTable] container.Level 为空，关卡表未加载");
+                Debug.LogError("[LevelConfigTable] Level 行为空，关卡表未加载");
                 return;
             }
 
-            foreach (var row in container.Level)
+            foreach (var row in rows)
             {
-                if (row == null) continue;
                 var cfg = new LevelConfig
                 {
                     MapId = row.MapId,
@@ -81,15 +80,14 @@ namespace HotUpdate.Gameplay
 
             Debug.LogError(
                 $"[LevelConfigTable] 缺少关卡配置 map={mapId} level={levelId} " +
-                $"(initialized={_initialized}, count={_byKey.Count})。请检查 Excel 导表与 Level.json。");
-
+                $"(initialized={_initialized}, count={_byKey.Count})，返回占位配置");
             return new LevelConfig
             {
                 MapId = mapId,
                 LevelId = levelId,
                 MaxSteps = 30,
-                StepsFor3Stars = 20,
-                StepsFor2Stars = 25,
+                StepsFor3Stars = 15,
+                StepsFor2Stars = 22,
                 BoardWidth = 8,
                 BoardHeight = 8,
                 Goal = "score",

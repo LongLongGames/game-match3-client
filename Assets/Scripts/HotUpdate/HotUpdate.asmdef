@@ -4,8 +4,7 @@
     "references": [
         "UniTask",
         "VContainer",
-        "BakingSheet",
-        "BakingSheet.Json"
+        "ExcelConfigCompiler.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

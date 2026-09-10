@@ -1,108 +1,25 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
-using Cathei.BakingSheet;
-using Cathei.BakingSheet.Unity;
-using HotUpdate.Config;
 using UnityEditor;
 using UnityEngine;
 
 namespace Editor
 {
     /// <summary>
-    /// 唯一导表入口：从工程根目录 Excel/ 读取 xlsx，
-    /// 输出 JSON 到 Assets/Bundles/Config（客户端）以及同级 game-match3-server/config（服务端）。
-    /// BakingSheet 以 C# 类为 schema，故导表必须在客户端 Editor 完成。
+    /// 导表入口已统一到 Excel Config Compiler。
+    /// 保留菜单项，避免旧文档/习惯失效。
     /// </summary>
     public static class ConfigExportEditor
     {
-        private const string MenuPath = "Tools/导表/Export Config (Excel → JSON)";
+        const string MenuPath = "Tools/导表/Export Config (ExcelConfigCompiler)";
 
         [MenuItem(MenuPath)]
         public static void ExportConfig()
         {
-            ExportConfigAsync().Forget();
-        }
-
-        private static async Task ExportConfigAsync()
-        {
-            try
-            {
-                // Application.dataPath = .../game-match3-client/Assets
-                string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-                string excelDir = Path.Combine(projectRoot, "Excel");
-                string clientOutDir = Path.Combine(Application.dataPath, "Bundles", "Config");
-                // 与 client 同级的 server
-                string serverOutDir = Path.GetFullPath(Path.Combine(projectRoot, "..", "game-match3-server", "config"));
-
-                if (!Directory.Exists(excelDir))
-                {
-                    Directory.CreateDirectory(excelDir);
-                    EditorUtility.DisplayDialog(
-                        "导表",
-                        $"Excel 目录不存在，已创建：\n{excelDir}\n请放入 .xlsx 后重试。",
-                        "确定");
-                    return;
-                }
-
-                var xlsxFiles = Directory.GetFiles(excelDir, "*.xlsx");
-                if (xlsxFiles.Length == 0)
-                {
-                    EditorUtility.DisplayDialog(
-                        "导表",
-                        $"Excel 目录下没有 .xlsx：\n{excelDir}",
-                        "确定");
-                    return;
-                }
-
-                Debug.Log($"[ConfigExport] ExcelDir={excelDir}");
-                Debug.Log($"[ConfigExport] ClientOut={clientOutDir}");
-                Debug.Log($"[ConfigExport] ServerOut={serverOutDir}");
-
-                var logger = UnityLogger.Default;
-                var container = new GameSheetContainer(logger);
-                var excelConverter = new ExcelSheetConverter(excelDir);
-
-                // Bake = 从 Excel 导入并校验
-                await container.Bake(excelConverter);
-
-                Directory.CreateDirectory(clientOutDir);
-                Directory.CreateDirectory(serverOutDir);
-
-                await container.Store(new JsonSheetConverter(clientOutDir));
-                await container.Store(new JsonSheetConverter(serverOutDir));
-
-                AssetDatabase.Refresh();
-
-                string msg =
-                    $"导表完成。\n" +
-                    $"Excel: {excelDir}\n" +
-                    $"Client: {clientOutDir}\n" +
-                    $"Server: {serverOutDir}\n" +
-                    $"已写入 JSON（工作表名 = Sheet 属性名，如 Level）。";
-                Debug.Log($"[ConfigExport] {msg.Replace("\n", " | ")}");
-                EditorUtility.DisplayDialog("导表成功", msg, "确定");
-            }
-            catch (Exception e)
-            {
-                Debug.LogException(e);
-                EditorUtility.DisplayDialog("导表失败", e.Message, "确定");
-            }
-        }
-
-        /// <summary>
-        /// 简单 fire-and-forget，避免未观察 Task 警告。
-        /// </summary>
-        private static async void Forget(this Task task)
-        {
-            try
-            {
-                await task;
-            }
-            catch (Exception e)
-            {
-                Debug.LogException(e);
-            }
+            // 打开官方导表窗口；实际编译在窗口内一键完成
+            EditorApplication.ExecuteMenuItem("Tools/Excel Config Compiler");
+            Debug.Log(
+                "[ConfigExport] 请使用 Excel Config Compiler 窗口完成导表。\n" +
+                "建议：Excel 源=工程根/Excel，代码输出=Assets/Scripts/HotUpdate/Config/Generated，" +
+                "二进制输出=Assets/Bundles/Config，命名空间=HotUpdate.Config");
         }
     }
 }

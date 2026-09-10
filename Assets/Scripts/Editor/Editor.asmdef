@@ -2,10 +2,7 @@
     "name": "Editor",
     "rootNamespace": "Editor",
     "references": [
-        "HotUpdate",
-        "BakingSheet",
-        "BakingSheet.Json",
-        "BakingSheet.Excel"
+        "HotUpdate"
     ],
     "includePlatforms": [
         "Editor"

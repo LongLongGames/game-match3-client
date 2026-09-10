@@ -38,9 +38,9 @@ MonoBehaviour:
     - com.cysharp
     - jp.hadashikick
     - com.openupm
-    - com.github-glitchenzo.nugetforunity
     - com.code-philosophy.hybridclr
-    - com.cathei.bakingsheet
+    - com.setsuodu.excelconfigcompiler
+    - com.setsuodu
     m_IsDefault: 0
     m_Capabilities: 0
     m_ConfigSource: 4
@@ -52,6 +52,6 @@ MonoBehaviour:
   m_RegistryInfoDraft:
     m_Modified: 0
     m_ErrorMessage: 
-    m_UserModificationsInstanceId: -896
-    m_OriginalInstanceId: -900
+    m_UserModificationsInstanceId: -914
+    m_OriginalInstanceId: -918
   m_LoadAssets: 0
