@@ -23,6 +23,20 @@
       "dependencies": {},
       "url": "https://package.openupm.com"
     },
+    "com.github-glitchenzo.nugetforunity": {
+      "version": "4.5.0",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://package.openupm.com"
+    },
+    "com.github.messagepack-csharp": {
+      "version": "https://github.com/MessagePack-CSharp/MessagePack-CSharp.git?path=src/MessagePack.UnityClient/Assets/Scripts/MessagePack",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "b0e5cee3e30e75004ea95e154ec3832027a46090"
+    },
     "com.setsuodu.assetbundleframework": {
       "version": "1.0.3",
       "depth": 0,
