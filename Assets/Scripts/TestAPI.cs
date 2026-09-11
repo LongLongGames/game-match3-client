@@ -12,8 +12,8 @@ using UnityEngine.UI;
 public class TestAPI : MonoBehaviour
 {
     [Header("服务器地址")]
-    public string mpBaseUrl = "http://localhost:8080";      // MP 网关
-    public string gameBaseUrl = "http://localhost:8081";    // game-match3-server 网关
+    public string mpBaseUrl = "http://localhost:11080"; // 中台固定
+    public string gameBaseUrl = "http://localhost:13180"; //# 严格按 G=1 公式：13000 + 100 + 80 = 13180
 
     [Header("测试账号")]
     public string username = "tester1";
