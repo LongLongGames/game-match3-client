@@ -20,28 +20,32 @@ namespace HotUpdate.Services
 
         public PlayerStateResponse State { get; private set; }
 
-        public int Energy { get; private set; } = 30;
-        public int EnergyMax { get; private set; } = 30;
+        public int Energy { get; private set; }
+        public int EnergyMax { get; private set; }
         public long Gold { get; private set; }
         public int UnlockedMap { get; private set; } = 1;
         public int CurrentMapId { get; private set; } = 1;
 
-        // 本地缓存进度：level_id -> stars（弱网 / 离线）
         LevelProgressItem[] _localLevels;
 
         public PlayerService(IHttpClient http, ApiConfig config)
         {
             _http = http;
             _config = config;
+            EnergyMax = GameRuleConfig.EnergyMax;
+            Energy = GameRuleConfig.EnergyMax;
             EnsureLocalLevels();
         }
 
         void EnsureLocalLevels()
         {
-            if (_localLevels != null && _localLevels.Length == LevelConfigTable.LevelsPerMap)
+            var n = GameRuleConfig.LevelsPerMap > 0
+                ? GameRuleConfig.LevelsPerMap
+                : LevelConfigTable.LevelsPerMap;
+            if (_localLevels != null && _localLevels.Length == n)
                 return;
-            _localLevels = new LevelProgressItem[LevelConfigTable.LevelsPerMap];
-            for (var i = 0; i < LevelConfigTable.LevelsPerMap; i++)
+            _localLevels = new LevelProgressItem[n];
+            for (var i = 0; i < n; i++)
             {
                 _localLevels[i] = new LevelProgressItem
                 {
@@ -93,21 +97,20 @@ namespace HotUpdate.Services
                 Debug.LogWarning("[Player] RefreshState failed, use local cache: " + e.Message);
             }
 
-            // 离线占位
             EnsureLocalLevels();
             State = new PlayerStateResponse
             {
                 game_id = _config.GameId,
                 energy = Energy,
                 energy_max = EnergyMax,
-                energy_regen_seconds = 300,
+                energy_regen_seconds = GameRuleConfig.EnergyRegenSeconds,
                 seconds_to_next_energy = 0,
                 gold = Gold,
                 unlocked_map = UnlockedMap,
                 map_id = CurrentMapId,
-                levels_per_map = LevelConfigTable.LevelsPerMap,
+                levels_per_map = GameRuleConfig.LevelsPerMap,
                 cleared_on_map = CountCleared(_localLevels),
-                map_unlock_clear_count = 10,
+                map_unlock_clear_count = GameRuleConfig.MapUnlockNeedClears,
                 levels = _localLevels
             };
         }
@@ -116,7 +119,8 @@ namespace HotUpdate.Services
         {
             State = s;
             Energy = s.energy;
-            EnergyMax = s.energy_max > 0 ? s.energy_max : 30;
+            // 服务端有值用服务端，否则用本地规则
+            EnergyMax = s.energy_max > 0 ? s.energy_max : GameRuleConfig.EnergyMax;
             Gold = s.gold;
             UnlockedMap = s.unlocked_map > 0 ? s.unlocked_map : 1;
             CurrentMapId = s.map_id > 0 ? s.map_id : CurrentMapId;
@@ -148,25 +152,25 @@ namespace HotUpdate.Services
                 mapId = UnlockedMap;
 
             EnsureLocalLevels();
-            // 顺序：第一关无星可打；其后需前一关至少 1 星
+            var cost = GameRuleConfig.EnergyCostPerLevel;
+            var minStars = GameRuleConfig.MinStarsToUnlockNextLevel;
+
             for (var i = 0; i < _localLevels.Length; i++)
             {
                 var lv = i + 1;
                 if (_localLevels[i].stars > 0)
-                    continue; // 已通关仍可重打，但优先找未通关
-                if (lv == 1 || _localLevels[i - 1].stars > 0)
+                    continue;
+                if (lv == 1 || _localLevels[i - 1].stars >= minStars)
                 {
                     levelId = lv;
-                    return Energy > 0;
+                    return Energy >= cost;
                 }
-                // 卡在前一关
                 levelId = lv;
                 return false;
             }
 
-            // 全通：重打最后一关或提示下一图
-            levelId = LevelConfigTable.LevelsPerMap;
-            if (CountCleared(_localLevels) >= 10 && UnlockedMap > mapId)
+            levelId = GameRuleConfig.LevelsPerMap;
+            if (CountCleared(_localLevels) >= GameRuleConfig.MapUnlockNeedClears && UnlockedMap > mapId)
             {
                 mapId = mapId + 1;
                 levelId = 1;
@@ -175,16 +179,32 @@ namespace HotUpdate.Services
                 for (var i = 0; i < _localLevels.Length; i++)
                     _localLevels[i] = new LevelProgressItem { level_id = i + 1 };
             }
-            return Energy > 0;
+            return Energy >= cost;
+        }
+
+        /// <summary>
+        /// 进关扣体力（客户端先行）。服务端 start API 未就绪前只改本地。
+        /// </summary>
+        public bool TrySpendEnergyForEnter()
+        {
+            var cost = GameRuleConfig.EnergyCostPerLevel;
+            if (cost < 0) cost = 0;
+            if (Energy < cost)
+            {
+                Debug.LogWarning($"[Player] energy not enough: have={Energy} need={cost}");
+                return false;
+            }
+            Energy -= cost;
+            Debug.Log($"[Player] spend energy for enter: -{cost}, left={Energy}");
+            return true;
         }
 
         public async UniTask<ClearLevelResponse> ClearLevelAsync(
             int mapId, int levelId, int stars, int steps, long score,
             CancellationToken ct = default)
         {
-            // 本地先扣体力 / 加金币 / 记进度（弱网立刻反馈）
-            if (Energy > 0) Energy--;
-            var goldGain = 50L * Math.Max(1, stars);
+            // 体力已在进关时扣除，这里不再扣
+            var goldGain = (long)GameRuleConfig.GoldPerStar * Math.Max(1, stars);
             Gold += goldGain;
 
             EnsureLocalLevels();
@@ -199,7 +219,7 @@ namespace HotUpdate.Services
                 _localLevels[levelId - 1] = item;
             }
 
-            if (CountCleared(_localLevels) >= 10 && mapId >= UnlockedMap)
+            if (CountCleared(_localLevels) >= GameRuleConfig.MapUnlockNeedClears && mapId >= UnlockedMap)
                 UnlockedMap = mapId + 1;
 
             ClearLevelResponse serverResp = null;
@@ -220,7 +240,11 @@ namespace HotUpdate.Services
                 serverResp = JsonUtility.FromJson<ClearLevelResponse>(text);
                 if (serverResp != null)
                 {
-                    Energy = serverResp.energy;
+                    // 服务端若仍在 clear 扣体力，会把 energy 写回来；
+                    // 等服务端改为进关扣后，这里自然对齐。
+                    // 在双端规则切换期：以「本地已进关扣过」为准，取更低值，避免被服务器加回。
+                    if (serverResp.energy < Energy)
+                        Energy = serverResp.energy;
                     EnergyMax = serverResp.energy_max > 0 ? serverResp.energy_max : EnergyMax;
                     Gold = serverResp.gold;
                     UnlockedMap = serverResp.unlocked_map > 0 ? serverResp.unlocked_map : UnlockedMap;

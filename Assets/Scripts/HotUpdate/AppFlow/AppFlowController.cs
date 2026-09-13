@@ -70,19 +70,73 @@ namespace HotUpdate.AppFlow
                 await GotoAsync(AppState.Home);
             });
 
+            // 「开始下一关」：走自动选关逻辑
             _ui.SetStartGameHandler(async () =>
             {
                 if (!_player.TryGetNextPlayableLevel(out var mapId, out var levelId))
                 {
-                    if (_player.Energy <= 0)
+                    if (_player.Energy < HotUpdate.Gameplay.GameRuleConfig.EnergyCostPerLevel)
                         await _ui.ShowErrorAsync("体力不足，请稍后再试");
                     else
                         await _ui.ShowErrorAsync("关卡未解锁");
                     return;
                 }
 
+                if (!_player.TrySpendEnergyForEnter())
+                {
+                    await _ui.ShowErrorAsync("体力不足，请稍后再试");
+                    return;
+                }
+
                 _pendingMapId = mapId;
                 _pendingLevelId = levelId;
+                Debug.Log($"[AppFlow] StartNext map={_pendingMapId} level={_pendingLevelId}");
+                await GotoAsync(AppState.Game);
+            });
+
+            // 点击具体关卡按钮：严格使用传入的 mapId / levelId
+            _ui.SetStartLevelHandler(async (mapId, levelId) =>
+            {
+                if (_player.Energy < HotUpdate.Gameplay.GameRuleConfig.EnergyCostPerLevel)
+                {
+                    await _ui.ShowErrorAsync("体力不足，请稍后再试");
+                    return;
+                }
+
+                // 再校验一次解锁（UI 已拦，这里双保险）
+                if (levelId > 1)
+                {
+                    var levels = _player.State?.levels;
+                    bool ok = false;
+                    var minStars = HotUpdate.Gameplay.GameRuleConfig.MinStarsToUnlockNextLevel;
+                    if (levels != null)
+                    {
+                        foreach (var item in levels)
+                        {
+                            if (item != null && item.level_id == levelId - 1 && item.stars >= minStars)
+                            {
+                                ok = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!ok)
+                    {
+                        await _ui.ShowErrorAsync("关卡未解锁");
+                        return;
+                    }
+                }
+
+                // 进关扣体力（客户端先行）
+                if (!_player.TrySpendEnergyForEnter())
+                {
+                    await _ui.ShowErrorAsync("体力不足，请稍后再试");
+                    return;
+                }
+
+                _pendingMapId = mapId;
+                _pendingLevelId = levelId;
+                Debug.Log($"[AppFlow] StartLevel click map={_pendingMapId} level={_pendingLevelId}");
                 await GotoAsync(AppState.Game);
             });
 
@@ -146,7 +200,6 @@ namespace HotUpdate.AppFlow
                 return;
             }
 
-            // 导表产物 → 内存表（失败不阻断登录，但进关会打错误日志）
             try
             {
                 await ConfigLoader.LoadDefaultAsync();
@@ -172,22 +225,49 @@ namespace HotUpdate.AppFlow
         async UniTask OnHomeAsync(CancellationToken ct)
         {
             await _player.RefreshProfileAsync(ct);
-            await _player.RefreshStateAsync(mapId: 1, ct);
+
+            int mapId = _player.CurrentMapId > 0 ? _player.CurrentMapId : 1;
+            await _player.RefreshStateAsync(mapId: mapId, ct);
+
+            // 下一可玩关卡号（用于底部「第N关」按钮）
+            int nextLevelId = 1;
+            if (_player.TryGetNextPlayableLevel(out var nextMap, out var nextLv))
+            {
+                // 若下一关在别的地图，底部按钮仍显示本图进度逻辑下的下一关号
+                nextLevelId = nextMap == mapId ? nextLv : nextLv;
+            }
+            else
+            {
+                // 全通或体力不足：仍显示当前地图最后一关号作参考
+                nextLevelId = LevelConfigTable.LevelsPerMap;
+            }
+
             _ui.SetHomeStatus(
                 _player.Energy,
                 _player.EnergyMax,
                 _player.Gold,
                 _player.UnlockedMap,
                 _player.State?.cleared_on_map ?? 0,
-                _player.State?.levels_per_map ?? LevelConfigTable.LevelsPerMap);
+                _player.State?.levels_per_map ?? LevelConfigTable.LevelsPerMap,
+                nextLevelId);
+
+            _ui.SetHomeLevels(mapId, _player.State?.levels);
+
             await _ui.ShowPanelAsync(UIPanel.Home, ct);
         }
 
         async UniTask OnGameAsync(CancellationToken ct)
         {
-            var cfg = LevelConfigTable.Get(_pendingMapId, _pendingLevelId);
-            await _ui.ShowPanelAsync(UIPanel.Game, ct);
+            // 严格用 pending，保证和点击的关卡一致
+            var mapId = _pendingMapId;
+            var levelId = _pendingLevelId;
+            Debug.Log($"[AppFlow] OnGameAsync map={mapId} level={levelId}");
+
+            var cfg = LevelConfigTable.Get(mapId, levelId);
+
+            // 先设状态再显示，避免闪一下错误关卡号
             _ui.SetGameStatus(cfg.MapId, cfg.LevelId, cfg.MaxSteps);
+            await _ui.ShowPanelAsync(UIPanel.Game, ct);
 
             var result = await _match3.PlayAsync(cfg, ct);
             if (result.Success)
@@ -195,7 +275,6 @@ namespace HotUpdate.AppFlow
                 Debug.Log($"[AppFlow] clear map={result.MapId} lv={result.LevelId} stars={result.Stars} steps={result.Steps} score={result.Score}");
                 await _player.ClearLevelAsync(
                     result.MapId, result.LevelId, result.Stars, result.Steps, result.Score, ct);
-                // 排行榜仍可按本局分数提交
                 await _leaderboard.SubmitScoreAsync(result.Score, ct);
             }
 

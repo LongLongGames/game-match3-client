@@ -21,11 +21,17 @@ namespace HotUpdate.Services
         UniTask RefreshStateAsync(int mapId = 1, CancellationToken ct = default);
 
         /// <summary>
-        /// 选下一关可玩关卡：(mapId, levelId)。无体力或全通返回 false。
+        /// 选下一关可玩关卡：(mapId, levelId)。体力不足或未解锁返回 false。
         /// </summary>
         bool TryGetNextPlayableLevel(out int mapId, out int levelId);
 
-        /// <summary>通关上报；失败时仍可本地推进（弱网）</summary>
+        /// <summary>
+        /// 进关时扣除体力（客户端先行）。不足返回 false。
+        /// 服务端 start-level API 就绪后应在此对接。
+        /// </summary>
+        bool TrySpendEnergyForEnter();
+
+        /// <summary>通关上报；不再在此处扣体力（进关已扣）</summary>
         UniTask<ClearLevelResponse> ClearLevelAsync(
             int mapId, int levelId, int stars, int steps, long score,
             CancellationToken ct = default);
