@@ -12,7 +12,7 @@ namespace HotUpdate.Config
     public static class ConfigLoader
     {
         /// <summary>
-        /// 加载 Level / Item / CheckInReward，写入对应内存表。
+        /// 加载 Level / Item / CheckInReward / GameRules，写入对应内存表。
         /// </summary>
         public static Task LoadDefaultAsync()
         {
@@ -35,6 +35,13 @@ namespace HotUpdate.Config
                 var rows = CheckInRewardTable.LoadAndCache(data);
                 CheckInRewardConfigTable.Initialize(rows);
                 Debug.Log($"[ConfigLoader] CheckInReward.bytes rows={rows.Length}");
+            });
+
+            LoadTable("GameRules", data =>
+            {
+                var rows = GameRulesTable.LoadAndCache(data);
+                GameRuleConfig.Initialize(rows);
+                Debug.Log($"[ConfigLoader] GameRules.bytes rows={rows.Length}");
             });
 
             return Task.CompletedTask;
