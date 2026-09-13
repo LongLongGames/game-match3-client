@@ -7,11 +7,13 @@ using HotUpdate.Services;
 using HotUpdate.UI;
 using HotUpdate.Gameplay;
 using HotUpdate.Config;
+using HotUpdate.Network;
 
 namespace HotUpdate.AppFlow
 {
     /// <summary>
-    /// 全局流程：CheckUpdate → Login → Home(状态) → Game(通关上报) → Home
+    /// 全局流程：CheckUpdate →（校验 Token）→ Login / Home → Game → Home
+    /// 401：HTTP 层触发 → 强制登出回 Login。
     /// </summary>
     public class AppFlowController : IAppFlow
     {
@@ -23,8 +25,10 @@ namespace HotUpdate.AppFlow
         readonly IMatch3Service _match3;
         readonly ILeaderboardService _leaderboard;
         readonly IPlayerService _player;
+        readonly IHttpClient _http;
 
         bool _handlersBound;
+        bool _unauthorizedHandling;
         int _pendingMapId = 1;
         int _pendingLevelId = 1;
 
@@ -34,7 +38,8 @@ namespace HotUpdate.AppFlow
             IUIService ui,
             IMatch3Service match3,
             ILeaderboardService leaderboard,
-            IPlayerService player)
+            IPlayerService player,
+            IHttpClient http)
         {
             _version = version;
             _auth = auth;
@@ -42,13 +47,29 @@ namespace HotUpdate.AppFlow
             _match3 = match3;
             _leaderboard = leaderboard;
             _player = player;
+            _http = http;
         }
 
         public async UniTask StartAsync(CancellationToken ct)
         {
+            // 全局 401 → 登出回登录（防抖，避免并发请求连跳多次）
+            _http.Unauthorized += OnUnauthorized;
+
             BindUiHandlers();
             Debug.Log("[AppFlow] Start");
             await GotoAsync(AppState.CheckUpdate, ct);
+        }
+
+        void OnUnauthorized()
+        {
+            if (_unauthorizedHandling) return;
+            if (State == AppState.Login || State == AppState.Boot || State == AppState.CheckUpdate)
+                return;
+
+            _unauthorizedHandling = true;
+            Debug.LogWarning("[AppFlow] 401 → force Logout + Login");
+            _auth.Logout();
+            GotoAsync(AppState.Login).ContinueWith(() => { _unauthorizedHandling = false; }).Forget();
         }
 
         void BindUiHandlers()
@@ -70,7 +91,6 @@ namespace HotUpdate.AppFlow
                 await GotoAsync(AppState.Home);
             });
 
-            // 「开始下一关」：走自动选关逻辑
             _ui.SetStartGameHandler(async () =>
             {
                 if (!_player.TryGetNextPlayableLevel(out var mapId, out var levelId))
@@ -94,7 +114,6 @@ namespace HotUpdate.AppFlow
                 await GotoAsync(AppState.Game);
             });
 
-            // 点击具体关卡按钮：严格使用传入的 mapId / levelId
             _ui.SetStartLevelHandler(async (mapId, levelId) =>
             {
                 if (_player.Energy < HotUpdate.Gameplay.GameRuleConfig.EnergyCostPerLevel)
@@ -103,7 +122,6 @@ namespace HotUpdate.AppFlow
                     return;
                 }
 
-                // 再校验一次解锁（UI 已拦，这里双保险）
                 if (levelId > 1)
                 {
                     var levels = _player.State?.levels;
@@ -127,7 +145,6 @@ namespace HotUpdate.AppFlow
                     }
                 }
 
-                // 进关扣体力（客户端先行）
                 if (!_player.TrySpendEnergyForEnter())
                 {
                     await _ui.ShowErrorAsync("体力不足，请稍后再试");
@@ -178,6 +195,16 @@ namespace HotUpdate.AppFlow
                         break;
                 }
             }
+            catch (UnauthorizedException)
+            {
+                // HTTP 已触发 OnUnauthorized；此处兜底保证停在 Login
+                Debug.LogWarning("[AppFlow] UnauthorizedException in Goto");
+                if (State != AppState.Login)
+                {
+                    _auth.Logout();
+                    await GotoAsync(AppState.Login, ct);
+                }
+            }
             catch (OperationCanceledException)
             {
                 Debug.Log("[AppFlow] Canceled");
@@ -210,11 +237,21 @@ namespace HotUpdate.AppFlow
                 Debug.LogError("[AppFlow] 配置加载失败，关卡将缺少表数据");
             }
 
+            // 关键：不能只看本地有没有 token 字符串
             _auth.TryRestoreToken();
             if (_auth.IsLoggedIn)
-                await GotoAsync(AppState.Home, ct);
-            else
-                await GotoAsync(AppState.Login, ct);
+            {
+                var valid = await _auth.ValidateSessionAsync(ct);
+                if (valid)
+                {
+                    await GotoAsync(AppState.Home, ct);
+                    return;
+                }
+                // 无效已 Logout，或网络失败 → 走登录
+                Debug.Log("[AppFlow] session invalid or unreachable → Login");
+            }
+
+            await GotoAsync(AppState.Login, ct);
         }
 
         async UniTask OnLoginAsync(CancellationToken ct)
@@ -229,16 +266,13 @@ namespace HotUpdate.AppFlow
             int mapId = _player.CurrentMapId > 0 ? _player.CurrentMapId : 1;
             await _player.RefreshStateAsync(mapId: mapId, ct);
 
-            // 下一可玩关卡号（用于底部「第N关」按钮）
             int nextLevelId = 1;
             if (_player.TryGetNextPlayableLevel(out var nextMap, out var nextLv))
             {
-                // 若下一关在别的地图，底部按钮仍显示本图进度逻辑下的下一关号
                 nextLevelId = nextMap == mapId ? nextLv : nextLv;
             }
             else
             {
-                // 全通或体力不足：仍显示当前地图最后一关号作参考
                 nextLevelId = LevelConfigTable.LevelsPerMap;
             }
 
@@ -258,14 +292,12 @@ namespace HotUpdate.AppFlow
 
         async UniTask OnGameAsync(CancellationToken ct)
         {
-            // 严格用 pending，保证和点击的关卡一致
             var mapId = _pendingMapId;
             var levelId = _pendingLevelId;
             Debug.Log($"[AppFlow] OnGameAsync map={mapId} level={levelId}");
 
             var cfg = LevelConfigTable.Get(mapId, levelId);
 
-            // 先设状态再显示，避免闪一下错误关卡号
             _ui.SetGameStatus(cfg.MapId, cfg.LevelId, cfg.MaxSteps);
             await _ui.ShowPanelAsync(UIPanel.Game, ct);
 

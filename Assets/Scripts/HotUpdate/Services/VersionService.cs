@@ -14,18 +14,23 @@ namespace HotUpdate.Services
         public async UniTask<bool> CheckAndUpdateAsync(CancellationToken ct = default)
         {
             // TODO: 接入 AssetBundleFramework
-            // await ABConfig.LoadAsync(ct);
-            // await updater.CheckAndUpdateAsync(progress, ct);
-            // await ABManager.Instance.InitializeAsync(ct);
-            // await ResManager.InitializeAsync(ct);
-
-            await UniTask.Delay(300, cancellationToken: ct); // 模拟检查
+            await UniTask.Delay(300, cancellationToken: ct);
             Debug.Log("[Version] CheckAndUpdate OK (mock)");
             return true;
         }
 
         public string GetAccessToken() => PlayerPrefs.GetString(TokenKey, "");
-        public void SetAccessToken(string token) => PlayerPrefs.SetString(TokenKey, token ?? "");
-        public void ClearToken() => PlayerPrefs.DeleteKey(TokenKey);
+
+        public void SetAccessToken(string token)
+        {
+            PlayerPrefs.SetString(TokenKey, token ?? "");
+            PlayerPrefs.Save();
+        }
+
+        public void ClearToken()
+        {
+            PlayerPrefs.DeleteKey(TokenKey);
+            PlayerPrefs.Save();
+        }
     }
 }

@@ -8,17 +8,19 @@ using UnityEngine.Networking;
 namespace HotUpdate.Network
 {
     /// <summary>
-    /// UniTask 版 HTTP 封装。自动附加 JWT。
+    /// UniTask 版 HTTP 封装。自动附加 JWT；401 时触发 Unauthorized 并抛 UnauthorizedException。
     /// </summary>
     public class HttpClientService : IHttpClient
     {
         public string AccessToken { get; set; }
 
+        public event Action Unauthorized;
+
         public async UniTask<string> GetAsync(string url, bool auth = false, CancellationToken ct = default)
         {
             using var req = UnityWebRequest.Get(url);
             ApplyAuth(req, auth);
-            return await SendAsync(req, ct);
+            return await SendAsync(req, auth, ct);
         }
 
         public async UniTask<string> PostJsonAsync(string url, string json, bool auth = false, CancellationToken ct = default)
@@ -29,7 +31,7 @@ namespace HotUpdate.Network
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
             ApplyAuth(req, auth);
-            return await SendAsync(req, ct);
+            return await SendAsync(req, auth, ct);
         }
 
         public async UniTask<string> PutJsonAsync(string url, string json, bool auth = true, CancellationToken ct = default)
@@ -40,7 +42,7 @@ namespace HotUpdate.Network
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
             ApplyAuth(req, auth);
-            return await SendAsync(req, ct);
+            return await SendAsync(req, auth, ct);
         }
 
         void ApplyAuth(UnityWebRequest req, bool auth)
@@ -49,7 +51,7 @@ namespace HotUpdate.Network
                 req.SetRequestHeader("Authorization", "Bearer " + AccessToken);
         }
 
-        async UniTask<string> SendAsync(UnityWebRequest req, CancellationToken ct)
+        async UniTask<string> SendAsync(UnityWebRequest req, bool auth, CancellationToken ct)
         {
             try
             {
@@ -59,6 +61,18 @@ namespace HotUpdate.Network
             {
                 req.Abort();
                 throw;
+            }
+
+            // 鉴权请求 401：通知上层并抛专用异常，避免继续当「已登录」用
+            if (auth && req.responseCode == 401)
+            {
+                Debug.LogWarning($"[Http] 401 Unauthorized: {req.url}");
+                try { Unauthorized?.Invoke(); }
+                catch (Exception e) { Debug.LogException(e); }
+
+                throw new UnauthorizedException(
+                    req.responseCode,
+                    $"401 Unauthorized\n{req.downloadHandler?.text}");
             }
 
             if (req.result != UnityWebRequest.Result.Success)

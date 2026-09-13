@@ -11,7 +11,7 @@ namespace HotUpdate.Auth
     {
         readonly IHttpClient _http;
         readonly ApiConfig _config;
-        readonly IVersionService _version; // 复用本地存储
+        readonly IVersionService _version;
 
         public bool IsLoggedIn => !string.IsNullOrEmpty(_http.AccessToken);
 
@@ -63,10 +63,38 @@ namespace HotUpdate.Auth
                 _http.AccessToken = t;
         }
 
+        public async UniTask<bool> ValidateSessionAsync(CancellationToken ct = default)
+        {
+            if (string.IsNullOrEmpty(_http.AccessToken))
+                return false;
+
+            // 用游戏服 profile 做轻量鉴权校验（与后续 Home 拉取一致）
+            var url = $"{_config.GameBaseUrl}/api/v1/user/profile?game_id={_config.GameId}";
+            try
+            {
+                await _http.GetAsync(url, auth: true, ct);
+                Debug.Log("[Auth] ValidateSession OK");
+                return true;
+            }
+            catch (UnauthorizedException)
+            {
+                Debug.LogWarning("[Auth] ValidateSession 401 → Logout");
+                Logout();
+                return false;
+            }
+            catch (Exception e)
+            {
+                // 网络/服务异常：不保留「假登录」进 Home，避免空进度当第一关
+                Debug.LogWarning("[Auth] ValidateSession failed: " + e.Message);
+                return false;
+            }
+        }
+
         public void Logout()
         {
             _http.AccessToken = null;
             _version.ClearToken();
+            Debug.Log("[Auth] Logout, token cleared");
         }
     }
 }

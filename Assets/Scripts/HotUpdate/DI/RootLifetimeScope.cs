@@ -44,6 +44,9 @@ namespace HotUpdate
 
             // Flow
             builder.Register<IAppFlow, AppFlowController>(Lifetime.Singleton);
+
+            // Input Test
+            builder.RegisterEntryPoint<DebugInputSystem>();
         }
     }
 }
