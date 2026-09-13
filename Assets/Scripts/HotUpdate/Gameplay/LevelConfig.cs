@@ -16,8 +16,8 @@ namespace HotUpdate.Gameplay
         public int MaxSteps;
         public int StepsFor3Stars;
         public int StepsFor2Stars;
-        public int BoardWidth = 8;
-        public int BoardHeight = 8;
+        public int BoardWidth = 9;
+        public int BoardHeight = 9;
         public string Goal = "score";
         public int GoalValue = 1000;
     }
@@ -58,8 +58,8 @@ namespace HotUpdate.Gameplay
                     MaxSteps = row.MaxSteps,
                     StepsFor3Stars = row.StepsFor3Stars,
                     StepsFor2Stars = row.StepsFor2Stars,
-                    BoardWidth = row.BoardWidth > 0 ? row.BoardWidth : 8,
-                    BoardHeight = row.BoardHeight > 0 ? row.BoardHeight : 8,
+                    BoardWidth = row.BoardWidth > 0 ? row.BoardWidth : 9,
+                    BoardHeight = row.BoardHeight > 0 ? row.BoardHeight : 9,
                     Goal = string.IsNullOrEmpty(row.Goal) ? "score" : row.Goal,
                     GoalValue = row.GoalValue
                 };
@@ -88,8 +88,8 @@ namespace HotUpdate.Gameplay
                 MaxSteps = 30,
                 StepsFor3Stars = 15,
                 StepsFor2Stars = 22,
-                BoardWidth = 8,
-                BoardHeight = 8,
+                BoardWidth = 9,
+                BoardHeight = 9,
                 Goal = "score",
                 GoalValue = 1000
             };

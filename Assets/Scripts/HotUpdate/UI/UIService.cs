@@ -14,7 +14,7 @@ namespace HotUpdate.UI
     /// 不依赖 IAppFlow，避免与 AppFlowController 循环依赖。
     /// 跳转由外部通过 Handler 注入。
     /// </summary>
-    public class UIService : IUIService
+    public class UIService : IUIService, IMatch3Hud
     {
         readonly IAuthService _auth;
 
@@ -83,6 +83,21 @@ namespace HotUpdate.UI
             _tipLabel = null;
             _tipCts?.Cancel();
             _tipCts = null;
+            _boardChrome = null;
+            _boardHudLabel = null;
+
+            // Game：UI 必须透明且不挡点击，否则 Sprite 棋盘被盖住
+            // 其它页：不透明背景盖住 3D/2D 场景
+            if (panel == UIPanel.Game)
+            {
+                _root.style.backgroundColor = Color.clear;
+                _root.pickingMode = PickingMode.Ignore;
+            }
+            else
+            {
+                _root.style.backgroundColor = new Color(0.1f, 0.1f, 0.15f, 1f);
+                _root.pickingMode = PickingMode.Position;
+            }
 
             switch (panel)
             {
@@ -196,7 +211,10 @@ namespace HotUpdate.UI
         /// <summary>
         /// 不破坏当前界面的轻量 tip（用于关卡锁定等提示）。
         /// </summary>
-        void ShowTip(string message, float seconds = 1.6f)
+        // IMatch3Hud 要求精确签名 ShowTip(string)
+        public void ShowTip(string message) => ShowTip(message, 1.6f);
+
+        public void ShowTip(string message, float seconds)
         {
             if (_tipLabel == null || _tipRoot == null)
             {
@@ -247,8 +265,13 @@ namespace HotUpdate.UI
 
             _root = new VisualElement { name = "UI_Root" };
             _root.style.flexGrow = 1;
+            _root.style.width = Length.Percent(100);
+            _root.style.height = Length.Percent(100);
+            // 默认不透明；进 Game 时由 ShowPanelAsync 改成 clear + Ignore
             _root.style.backgroundColor = new Color(0.1f, 0.1f, 0.15f, 1f);
             _doc.rootVisualElement.Clear();
+            // Panel 本身也不要清成不透明色（若 PanelSettings.ClearColor 开了）
+            _doc.rootVisualElement.style.backgroundColor = Color.clear;
             _doc.rootVisualElement.Add(_root);
         }
 
@@ -602,17 +625,146 @@ namespace HotUpdate.UI
             return prevStars >= 1;
         }
 
+
+
         void BuildGame()
         {
+            // 仅 HUD 壳；真正棋盘由 Match3SpriteView（SpriteRenderer）绘制
             var page = new VisualElement { name = "UI_Game" };
             page.style.flexGrow = 1;
-            var label = new Label(
-                $"对局中\n地图 {_gameMapId}  关卡 {_gameLevelId}\n最大步数 {_gameMaxSteps}\n\n（Mock Match3，结束后自动上报通关）") { name = "Game_StatusLabel" };
-            StyleCenter(label);
-            label.style.whiteSpace = WhiteSpace.Normal;
-            page.Add(label);
+            page.style.backgroundColor = Color.clear; // 透出场景里的 Sprite 棋盘
+            page.pickingMode = PickingMode.Ignore;
+            // 顶部条占位，具体内容由 ShowBoardChrome 填充
+            var hud = new VisualElement { name = "Game_HudBar" };
+            hud.style.position = Position.Absolute;
+            hud.style.left = 0;
+            hud.style.right = 0;
+            hud.style.top = 0;
+            hud.style.height = 96;
+            hud.style.backgroundColor = new Color(0.08f, 0.09f, 0.14f, 0.82f);
+            hud.pickingMode = PickingMode.Ignore;
+            hud.style.paddingTop = 10;
+            hud.style.paddingBottom = 8;
+            hud.style.paddingLeft = 12;
+            hud.style.paddingRight = 12;
+            page.Add(hud);
+
+            var status = new Label(
+                $"对局中  地图 {_gameMapId}  关 {_gameLevelId}")
+            { name = "Game_StatusLabel" };
+            status.style.fontSize = 16;
+            status.style.color = Color.white;
+            status.style.unityTextAlign = TextAnchor.MiddleCenter;
+            status.style.whiteSpace = WhiteSpace.Normal;
+            hud.Add(status);
+
             _root.Add(page);
         }
+
+        // ---------- IMatch3Hud：与 Sprite 棋盘配合的顶栏 ----------
+
+        Action _boardGiveUp;
+        Action _boardShuffle;
+        Label _boardHudLabel;
+        VisualElement _boardChrome;
+
+        public void ShowBoardChrome(LevelConfig cfg, Action onGiveUp, Action onShuffle)
+        {
+            EnsureDoc();
+            _boardGiveUp = onGiveUp;
+            _boardShuffle = onShuffle;
+
+            // 若当前不在 Game 页，先清出 HUD 层
+            var existing = _root.Q("Game_BoardChrome");
+            existing?.RemoveFromHierarchy();
+
+            var chrome = new VisualElement { name = "Game_BoardChrome" };
+            chrome.style.position = Position.Absolute;
+            chrome.style.left = 0;
+            chrome.style.right = 0;
+            chrome.style.top = 0;
+            chrome.style.bottom = 0;
+            // 不拦截棋盘点击：整页 pickingMode 忽略，只给按钮开启
+            chrome.pickingMode = PickingMode.Ignore;
+
+            var top = new VisualElement { name = "Game_HudTop" };
+            top.style.position = Position.Absolute;
+            top.style.left = 0;
+            top.style.right = 0;
+            top.style.top = 0;
+            top.style.height = 100;
+            top.style.backgroundColor = new Color(0.08f, 0.09f, 0.14f, 0.88f);
+            top.style.paddingTop = 12;
+            top.style.paddingLeft = 12;
+            top.style.paddingRight = 12;
+            top.pickingMode = PickingMode.Ignore;
+
+            _boardHudLabel = new Label { name = "Game_HudLabel" };
+            _boardHudLabel.style.fontSize = 16;
+            _boardHudLabel.style.color = Color.white;
+            _boardHudLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _boardHudLabel.style.whiteSpace = WhiteSpace.Normal;
+            _boardHudLabel.pickingMode = PickingMode.Ignore;
+            top.Add(_boardHudLabel);
+
+            var btnRow = new VisualElement();
+            btnRow.style.flexDirection = FlexDirection.Row;
+            btnRow.style.justifyContent = Justify.Center;
+            btnRow.style.marginTop = 6;
+            // 按钮需要可点
+            btnRow.pickingMode = PickingMode.Position;
+
+            var btnGiveUp = new Button { text = "放弃", name = "Game_BtnGiveUp" };
+            StyleHudBtn(btnGiveUp, new Color(0.45f, 0.2f, 0.2f, 1f));
+            btnGiveUp.clicked += () => _boardGiveUp?.Invoke();
+            btnRow.Add(btnGiveUp);
+
+            var btnShuffle = new Button { text = "洗牌", name = "Game_BtnShuffle" };
+            btnShuffle.style.marginLeft = 12;
+            StyleHudBtn(btnShuffle, new Color(0.25f, 0.35f, 0.55f, 1f));
+            btnShuffle.clicked += () => _boardShuffle?.Invoke();
+            btnRow.Add(btnShuffle);
+
+            top.Add(btnRow);
+            chrome.Add(top);
+            _root.Add(chrome);
+            _boardChrome = chrome;
+
+            UpdateHud(cfg.MapId, cfg.LevelId, 0, cfg.GoalValue, cfg.MaxSteps);
+        }
+
+        static void StyleHudBtn(Button btn, Color bg)
+        {
+            btn.style.height = 36;
+            btn.style.width = 96;
+            btn.style.fontSize = 15;
+            btn.style.backgroundColor = bg;
+            btn.style.color = Color.white;
+            btn.style.borderTopLeftRadius = 6;
+            btn.style.borderTopRightRadius = 6;
+            btn.style.borderBottomLeftRadius = 6;
+            btn.style.borderBottomRightRadius = 6;
+            btn.pickingMode = PickingMode.Position;
+        }
+
+        public void HideBoardChrome()
+        {
+            _boardChrome?.RemoveFromHierarchy();
+            _boardChrome = null;
+            _boardHudLabel = null;
+            _boardGiveUp = null;
+            _boardShuffle = null;
+        }
+
+        public void UpdateHud(int mapId, int levelId, int score, int goal, int stepsLeft)
+        {
+            if (_boardHudLabel == null) return;
+            _boardHudLabel.text =
+                $"地图 {mapId}  关 {levelId}    分数 {score}/{goal}\n" +
+                $"剩余步数 {stepsLeft}    （Sprite 棋盘：点选相邻交换）";
+        }
+
+        // ShowTip 已存在
 
         static void StyleCenter(VisualElement e)
         {

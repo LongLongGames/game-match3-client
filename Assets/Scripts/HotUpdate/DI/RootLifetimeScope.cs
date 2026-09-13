@@ -36,11 +36,16 @@ namespace HotUpdate
             builder.Register<IVersionService, VersionService>(Lifetime.Singleton);
             builder.Register<IResService, ResService>(Lifetime.Singleton);
 
+            // UI：UIToolkit 壳 + Match3 HUD
+            builder.Register<UIService>(Lifetime.Singleton);
+            builder.Register<IUIService>(r => r.Resolve<UIService>(), Lifetime.Singleton);
+            builder.Register<IMatch3Hud>(r => r.Resolve<UIService>(), Lifetime.Singleton);
+
+            // 棋盘：SpriteRenderer 视图（不用 UGUI/UIToolkit 格子）
+            builder.Register<IMatch3View, Match3SpriteView>(Lifetime.Singleton);
+
             // Gameplay
             builder.Register<IMatch3Service, Match3Service>(Lifetime.Singleton);
-
-            // UI（不依赖 IAppFlow）
-            builder.Register<IUIService, UIService>(Lifetime.Singleton);
 
             // Flow
             builder.Register<IAppFlow, AppFlowController>(Lifetime.Singleton);
