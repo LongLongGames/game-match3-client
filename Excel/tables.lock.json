@@ -1,0 +1,10 @@
+﻿{
+  "version": 1,
+  "generatedAt": "2026-09-13T19:02:02Z",
+  "tables": [
+    {"table": "CheckInReward", "target": "Shared", "path": "Shared/CheckInReward.xlsx", "sha256": "594f675c2137bc4d6d65c2219d1b57de07d721a0568dfb74af39d887a35e7402", "rows": 7, "fields": 10},
+    {"table": "GameRules", "target": "Shared", "path": "Shared/GameRules.xlsx", "sha256": "fa39b9bb484790f7c78100f355dd3bd67f2fb6dce509bda805618b660dc0faa1", "rows": 1, "fields": 11},
+    {"table": "Item", "target": "Shared", "path": "Shared/Item.xlsx", "sha256": "17120bc392c6dcffbdbc03c4db293719405608369a0cc5b7e35fc228f6223ccd", "rows": 6, "fields": 6},
+    {"table": "Level", "target": "Shared", "path": "Shared/Level.xlsx", "sha256": "99bdcc8838917cee7b78eb21c53a9ae00d8e0558b93e7022c3acf8175c33f252", "rows": 20, "fields": 10}
+  ]
+}

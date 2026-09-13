@@ -12,7 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0c37923d49f496d449c561f8eec900a0, type: 3}
   m_Name: ExcelConfigCompilerSettings
   m_EditorClassIdentifier: ExcelConfigCompiler.Editor::ExcelConfigCompiler.Editor.ExcelConfigSettings
-  ExcelSourceFolder: ../Excel
-  GeneratedCodeFolder: Assets/Scripts/HotUpdate/Config/Generated
-  GeneratedBytesFolder: Assets/Bundles/Config
-  Namespace: HotUpdate.Config
+  ExcelSourceFolder: D:/LongLongGames/game-match3-client/Excel
+  ClientNamespace: HotUpdate.Config
+  ClientCodeFolder: Assets/Scripts/HotUpdate/Config/Generated
+  ClientBytesFolder: Assets/Bundles/Config
+  ServerNamespace: Game.Shared.Config
+  ServerCodeFolder: D:/LongLongGames/game-match3-server/src/Game.Shared/Config
+  ServerBytesFolder: D:/LongLongGames/game-match3-server/config
+  UseFrozenDictionary: 1
