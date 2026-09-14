@@ -3,7 +3,18 @@
     <!-- 顶部状态 -->
     <ui:VisualElement name="Home_Header" style="padding-top: 16px; padding-bottom: 8px; padding-left: 12px; padding-right: 12px;">
       <ui:Label name="Home_Title" text="地图 1" style="font-size: 28px; -unity-font-style: bold; color: white; -unity-text-align: middle-center;" />
-      <ui:Label name="Home_Status" text="体力 30/30    金币 0" style="font-size: 14px; color: rgb(242, 250, 255); -unity-text-align: middle-center; white-space: normal; margin-top: 4px;" />
+
+      <!-- 体力条：图标(VisualElement) + 进度填充 + 数值 -->
+      <ui:VisualElement name="Home_EnergyBar" style="flex-direction: row; align-items: center; justify-content: center; margin-top: 8px; height: 28px;">
+        <!-- 真实图片引用：Arts/Sprites/icon_energy -->
+        <ui:VisualElement name="Home_EnergyIcon" style="width: 28px; height: 28px; margin-right: 6px; background-image: url(&apos;project://database/Assets/Arts/Sprites/icon_energy.png&apos;); -unity-background-scale-mode: scale-to-fit;" />
+        <ui:VisualElement name="Home_EnergyBarBg" style="flex-grow: 0; width: 140px; height: 16px; background-color: rgba(0, 0, 0, 0.35); border-top-left-radius: 8px; border-top-right-radius: 8px; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; overflow: hidden;">
+          <ui:VisualElement name="Home_EnergyBarFill" style="width: 100%; height: 100%; background-color: rgb(80, 200, 120); border-top-left-radius: 8px; border-top-right-radius: 8px; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;" />
+        </ui:VisualElement>
+        <ui:Label name="Home_EnergyText" text="30/30" style="font-size: 14px; color: rgb(242, 250, 255); margin-left: 8px; -unity-font-style: bold; min-width: 48px;" />
+      </ui:VisualElement>
+
+      <ui:Label name="Home_Status" text="金币 0    已解锁地图 1    本图进度 0/10" style="font-size: 14px; color: rgb(242, 250, 255); -unity-text-align: middle-center; white-space: normal; margin-top: 6px;" />
     </ui:VisualElement>
 
     <!-- 中部：关卡路径区域（按钮由代码动态创建并挂到此节点） -->
