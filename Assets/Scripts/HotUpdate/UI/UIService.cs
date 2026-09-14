@@ -6,6 +6,7 @@ using UnityEngine.UIElements;
 using HotUpdate.Auth;
 using HotUpdate.Network;
 using HotUpdate.Gameplay;
+using HotUpdate.Services;
 
 namespace HotUpdate.UI
 {
@@ -40,6 +41,11 @@ namespace HotUpdate.UI
         VisualElement _tipRoot;
         Label _tipLabel;
         CancellationTokenSource _tipCts;
+
+        string _currentUIAsset; // 当前 AB 加载的 UI 资源名（用于卸载）
+
+        public UIPanel CurrentPanel { get; private set; } = UIPanel.None;
+        public string CurrentUIAsset => _currentUIAsset;
 
         public UIService(IAuthService auth)
         {
@@ -76,9 +82,12 @@ namespace HotUpdate.UI
             _gameMaxSteps = maxSteps;
         }
 
+
         public async UniTask ShowPanelAsync(UIPanel panel, CancellationToken ct = default)
         {
             EnsureDoc();
+            CurrentPanel = panel;
+            Debug.Log($"[UI] ShowPanel → {panel} asset={_currentUIAsset ?? "(pending)"}");
             _root.Clear();
             _tipRoot = null;
             _tipLabel = null;
@@ -86,6 +95,12 @@ namespace HotUpdate.UI
             _tipCts = null;
             _boardChrome = null;
             _boardHudLabel = null;
+
+            if (!string.IsNullOrEmpty(_currentUIAsset))
+            {
+                UIPanelLoader.Unload(_currentUIAsset);
+                _currentUIAsset = null;
+            }
 
             // Game：UI 必须透明且不挡点击，否则 Sprite 棋盘被盖住
             // 其它页：不透明背景盖住 3D/2D 场景
@@ -103,19 +118,36 @@ namespace HotUpdate.UI
             switch (panel)
             {
                 case UIPanel.CheckUpdate:
-                    BuildCheckUpdate();
+                    _currentUIAsset = "UI_CheckUpdate";
+                    {
+                        var page = await UIPanelLoader.LoadAsync(_currentUIAsset, _root, ct);
+                        if (page != null) BindCheckUpdate(page);
+                    }
                     break;
                 case UIPanel.Login:
-                    BuildLogin();
+                    _currentUIAsset = "UI_Login";
+                    {
+                        var page = await UIPanelLoader.LoadAsync(_currentUIAsset, _root, ct);
+                        if (page != null) BindLogin(page);
+                    }
                     break;
                 case UIPanel.Home:
-                    BuildHome();
+                    _currentUIAsset = "UI_Home";
+                    {
+                        var page = await UIPanelLoader.LoadAsync(_currentUIAsset, _root, ct);
+                        if (page != null) BindHome(page);
+                    }
                     break;
                 case UIPanel.Game:
-                    BuildGame();
+                    _currentUIAsset = "UI_Game";
+                    {
+                        var page = await UIPanelLoader.LoadAsync(_currentUIAsset, _root, ct);
+                        if (page != null) BindGame(page);
+                    }
                     break;
             }
 
+            Debug.Log($"[UI] ShowPanel done → {CurrentPanel} asset={_currentUIAsset ?? "(null)"}");
             await UniTask.Yield(ct);
         }
 
@@ -570,147 +602,88 @@ namespace HotUpdate.UI
             _doc.rootVisualElement.Add(_root);
         }
 
-        void BuildCheckUpdate()
+
+        void BindCheckUpdate(VisualElement page)
         {
-            var page = new VisualElement { name = "UI_CheckUpdate" };
-            page.style.flexGrow = 1;
-            var label = new Label("检查更新中...") { name = "CheckUpdate_Label" };
-            StyleCenter(label);
-            page.Add(label);
-            _root.Add(page);
+            // UXML 已含默认文案，可按需改：
+            // var label = page.Q<Label>("CheckUpdate_Label");
+            // if (label != null) label.text = "检查更新中...";
         }
 
-        void BuildLogin()
+        void BindLogin(VisualElement page)
         {
-            var box = new VisualElement { name = "UI_Login" };
-            box.style.flexGrow = 1;
-            box.style.justifyContent = Justify.Center;
-            box.style.alignItems = Align.Center;
-            box.style.backgroundColor = new Color(0.12f, 0.12f, 0.18f, 1f);
+            var user = page.Q<TextField>("Login_User");
+            var pass = page.Q<TextField>("Login_Pass");
+            var btn = page.Q<Button>("Login_BtnSubmit");
+            var offline = page.Q<Button>("Login_BtnOffline");
 
-            var card = new VisualElement { name = "Login_Card" };
-            card.style.width = 420;
-            card.style.paddingTop = 32;
-            card.style.paddingBottom = 32;
-            card.style.paddingLeft = 28;
-            card.style.paddingRight = 28;
-            card.style.backgroundColor = new Color(0.18f, 0.18f, 0.26f, 1f);
-            card.style.borderTopLeftRadius = 12;
-            card.style.borderTopRightRadius = 12;
-            card.style.borderBottomLeftRadius = 12;
-            card.style.borderBottomRightRadius = 12;
-
-            var title = new Label("登录") { name = "Login_Title" };
-            title.style.fontSize = 36;
-            title.style.color = Color.white;
-            title.style.unityTextAlign = TextAnchor.MiddleCenter;
-            title.style.marginBottom = 28;
-            title.style.unityFontStyleAndWeight = FontStyle.Bold;
-            card.Add(title);
-
-            var user = new TextField("账号") { name = "Login_User" };
-            user.value = "test";
-            user.style.marginBottom = 12;
-            user.style.fontSize = 18;
-            user.style.color = Color.white;
-            StyleField(user);
-            card.Add(user);
-
-            var pass = new TextField("密码") { name = "Login_Pass" };
-            pass.isPasswordField = true;
-            pass.value = "123456";
-            pass.style.marginBottom = 24;
-            pass.style.fontSize = 18;
-            pass.style.color = Color.white;
-            StyleField(pass);
-            card.Add(pass);
-
-            var btn = new Button { text = "登录", name = "Login_BtnSubmit" };
-            btn.style.height = 48;
-            btn.style.fontSize = 20;
-            btn.style.backgroundColor = new Color(0.25f, 0.55f, 0.95f, 1f);
-            btn.style.color = Color.white;
-            btn.style.marginBottom = 12;
-            btn.clicked += async () =>
+            if (user != null && string.IsNullOrEmpty(user.value))
+                user.value = "test";
+            if (pass != null)
             {
-                if (_onLogin == null) return;
-                btn.SetEnabled(false);
-                try { await _onLogin(user.value, pass.value); }
-                finally { btn.SetEnabled(true); }
-            };
-            card.Add(btn);
+                pass.isPasswordField = true;
+                if (string.IsNullOrEmpty(pass.value))
+                    pass.value = "123456";
+            }
 
-            var offline = new Button { text = "离线进入（演示）", name = "Login_BtnOffline" };
-            offline.style.height = 44;
-            offline.style.fontSize = 16;
-            offline.style.backgroundColor = new Color(0.28f, 0.28f, 0.36f, 1f);
-            offline.style.color = Color.white;
-            offline.clicked += async () =>
+            if (btn != null)
             {
-                if (_onOfflineEnter != null)
-                    await _onOfflineEnter();
-            };
-            card.Add(offline);
+                btn.clicked += async () =>
+                {
+                    if (_onLogin == null) return;
+                    btn.SetEnabled(false);
+                    try { await _onLogin(user?.value ?? "", pass?.value ?? ""); }
+                    finally { btn.SetEnabled(true); }
+                };
+            }
 
-            box.Add(card);
-            _root.Add(box);
-        }
-
-        static void StyleField(TextField field)
-        {
-            field.style.height = 40;
-            var input = field.Q("unity-text-input");
-            if (input != null)
+            if (offline != null)
             {
-                input.style.backgroundColor = new Color(0.1f, 0.1f, 0.14f, 1f);
-                input.style.color = Color.white;
-                input.style.paddingLeft = 8;
-                input.style.paddingRight = 8;
+                offline.clicked += async () =>
+                {
+                    if (_onOfflineEnter != null)
+                        await _onOfflineEnter();
+                };
             }
         }
 
-        void BuildHome()
+        void BindHome(VisualElement page)
         {
-            // 整体：竖版，上状态 → 中地图路径 → 底按钮
-            var rootCol = new VisualElement { name = "UI_Home" };
-            rootCol.style.flexGrow = 1;
-            rootCol.style.flexDirection = FlexDirection.Column;
-            rootCol.style.backgroundColor = new Color(0.18f, 0.55f, 0.28f, 1f);
+            var title = page.Q<Label>("Home_Title");
+            if (title != null)
+                title.text = $"地图 {_homeMapId}";
 
-            // ---- 顶部状态 ----
-            var header = new VisualElement { name = "Home_Header" };
-            header.style.paddingTop = 16;
-            header.style.paddingBottom = 8;
-            header.style.paddingLeft = 12;
-            header.style.paddingRight = 12;
+            var status = page.Q<Label>("Home_Status");
+            if (status != null)
+            {
+                status.text =
+                    $"体力 {_energy}/{_energyMax}    金币 {_gold}\n" +
+                    $"已解锁地图 {_unlockedMap}    本图进度 {_clearedOnMap}/{_levelsPerMap}";
+            }
 
-            var title = new Label($"地图 {_homeMapId}") { name = "Home_Title" };
-            title.style.fontSize = 28;
-            title.style.unityFontStyleAndWeight = FontStyle.Bold;
-            title.style.color = Color.white;
-            title.style.unityTextAlign = TextAnchor.MiddleCenter;
-            header.Add(title);
+            var pathArea = page.Q("Home_PathArea");
+            if (pathArea != null)
+                FillHomeLevels(pathArea);
 
-            var status = new Label(
-                $"体力 {_energy}/{_energyMax}    金币 {_gold}\n" +
-                $"已解锁地图 {_unlockedMap}    本图进度 {_clearedOnMap}/{_levelsPerMap}") { name = "Home_Status" };
-            status.style.fontSize = 14;
-            status.style.color = new Color(0.95f, 0.98f, 1f, 1f);
-            status.style.unityTextAlign = TextAnchor.MiddleCenter;
-            status.style.whiteSpace = WhiteSpace.Normal;
-            status.style.marginTop = 4;
-            header.Add(status);
-            rootCol.Add(header);
+            var nextBtn = page.Q<Button>("Home_BtnNext");
+            if (nextBtn != null)
+            {
+                nextBtn.text = $"第{_nextLevelId}关";
+                nextBtn.clicked += () => ShowEnterConfirm(_homeMapId, _nextLevelId);
+            }
 
-            // ---- 中部：蛇形关卡路径（1 在下，10 在上）----
-            var pathArea = new VisualElement { name = "Home_PathArea" };
-            pathArea.style.flexGrow = 1;
-            pathArea.style.position = Position.Relative;
-            pathArea.style.minHeight = 520;
-            pathArea.style.marginLeft = 8;
-            pathArea.style.marginRight = 8;
+            var logout = page.Q<Button>("Home_BtnLogout");
+            if (logout != null)
+                logout.clicked += () => _onLogout?.Invoke();
+        }
 
-            // level -> (x, y)  y=0 底部, y=1 顶部；左右交替蛇形
+        /// <summary>
+        /// 关卡圆按钮仍由代码动态生成（蛇形坐标），挂到 UXML 的 Home_PathArea。
+        /// </summary>
+        void FillHomeLevels(VisualElement pathArea)
+        {
+            pathArea.Clear();
+
             var positions = new (float x, float y)[]
             {
                 (0.28f, 0.04f), // 1 底部偏左
@@ -752,14 +725,10 @@ namespace HotUpdate.UI
                 btn.style.paddingBottom = 4;
 
                 if (unlocked)
-                {
                     btn.style.backgroundColor = new Color(0.25f, 0.55f, 0.95f, 1f);
-                }
                 else
-                {
                     btn.style.backgroundColor = new Color(0.45f, 0.45f, 0.48f, 1f);
-                }
-                // 锁定关也允许点击，但只弹 tip，绝不跳转
+
                 btn.SetEnabled(true);
 
                 var num = new Label(levelId.ToString());
@@ -793,13 +762,11 @@ namespace HotUpdate.UI
                 {
                     if (!capturedUnlocked)
                     {
-                        // 不调用 ShowErrorAsync，避免整页被清、退不出
                         ShowTip("关卡未解锁，请先通关前一关");
                         return;
                     }
 
                     Debug.Log($"[UI] click level map={capturedMap} level={capturedLevel}");
-                    // 防误点：先弹出确认层
                     ShowEnterConfirm(capturedMap, capturedLevel);
                 };
 
@@ -818,82 +785,6 @@ namespace HotUpdate.UI
 
                 pathArea.Add(btn);
             }
-
-            rootCol.Add(pathArea);
-
-            // ---- 底部操作栏（贴底）----
-            var bottom = new VisualElement { name = "Home_BottomBar" };
-            bottom.style.flexDirection = FlexDirection.Row;
-            bottom.style.justifyContent = Justify.Center;
-            bottom.style.alignItems = Align.Center;
-            bottom.style.paddingTop = 10;
-            bottom.style.paddingBottom = 18;
-            bottom.style.paddingLeft = 12;
-            bottom.style.paddingRight = 12;
-            bottom.style.backgroundColor = new Color(0.1f, 0.28f, 0.16f, 0.85f);
-
-            var nextBtn = new Button { text = $"第{_nextLevelId}关", name = "Home_BtnNext" };
-            nextBtn.style.width = 180;
-            nextBtn.style.height = 48;
-            nextBtn.style.marginRight = 12;
-            nextBtn.style.backgroundColor = new Color(0.18f, 0.7f, 0.38f, 1f);
-            nextBtn.style.color = Color.white;
-            nextBtn.style.fontSize = 17;
-            nextBtn.style.borderTopLeftRadius = 8;
-            nextBtn.style.borderTopRightRadius = 8;
-            nextBtn.style.borderBottomLeftRadius = 8;
-            nextBtn.style.borderBottomRightRadius = 8;
-            nextBtn.clicked += () =>
-            {
-                // 与点圆圈一致：先确认再进
-                ShowEnterConfirm(_homeMapId, _nextLevelId);
-            };
-            bottom.Add(nextBtn);
-
-            var logout = new Button { text = "退出登录", name = "Home_BtnLogout" };
-            logout.style.width = 120;
-            logout.style.height = 48;
-            logout.style.backgroundColor = new Color(0.5f, 0.28f, 0.28f, 1f);
-            logout.style.color = Color.white;
-            logout.style.fontSize = 15;
-            logout.style.borderTopLeftRadius = 8;
-            logout.style.borderTopRightRadius = 8;
-            logout.style.borderBottomLeftRadius = 8;
-            logout.style.borderBottomRightRadius = 8;
-            logout.clicked += () => _onLogout?.Invoke();
-            bottom.Add(logout);
-
-            rootCol.Add(bottom);
-
-            // ---- 非破坏 tip 浮层 ----
-            _tipRoot = new VisualElement { name = "UI_Toast" };
-            _tipRoot.style.position = Position.Absolute;
-            _tipRoot.style.left = Length.Percent(10);
-            _tipRoot.style.right = Length.Percent(10);
-            _tipRoot.style.bottom = 80;
-            _tipRoot.style.paddingTop = 12;
-            _tipRoot.style.paddingBottom = 12;
-            _tipRoot.style.paddingLeft = 16;
-            _tipRoot.style.paddingRight = 16;
-            _tipRoot.style.backgroundColor = new Color(0.08f, 0.08f, 0.1f, 0.92f);
-            _tipRoot.style.borderTopLeftRadius = 10;
-            _tipRoot.style.borderTopRightRadius = 10;
-            _tipRoot.style.borderBottomLeftRadius = 10;
-            _tipRoot.style.borderBottomRightRadius = 10;
-            _tipRoot.style.display = DisplayStyle.None;
-            _tipRoot.style.alignItems = Align.Center;
-
-            _tipLabel = new Label("") { name = "Home_TipLabel" };
-            _tipLabel.style.fontSize = 16;
-            _tipLabel.style.color = Color.white;
-            _tipLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _tipLabel.style.whiteSpace = WhiteSpace.Normal;
-            _tipRoot.Add(_tipLabel);
-
-            rootCol.Add(_tipRoot);
-            _tipRoot.BringToFront();
-
-            _root.Add(rootCol);
         }
 
         static int GetStars(int levelId, LevelProgressItem[] levels)
@@ -933,40 +824,14 @@ namespace HotUpdate.UI
             return prevStars >= 1;
         }
 
-
-
-        void BuildGame()
+        void BindGame(VisualElement page)
         {
-            // 仅 HUD 壳；真正棋盘由 Match3SpriteView（SpriteRenderer）绘制
-            var page = new VisualElement { name = "UI_Game" };
-            page.style.flexGrow = 1;
-            page.style.backgroundColor = Color.clear; // 透出场景里的 Sprite 棋盘
             page.pickingMode = PickingMode.Ignore;
-            // 顶部条占位，具体内容由 ShowBoardChrome 填充
-            var hud = new VisualElement { name = "Game_HudBar" };
-            hud.style.position = Position.Absolute;
-            hud.style.left = 0;
-            hud.style.right = 0;
-            hud.style.top = 0;
-            hud.style.height = 96;
-            hud.style.backgroundColor = new Color(0.08f, 0.09f, 0.14f, 0.82f);
-            hud.pickingMode = PickingMode.Ignore;
-            hud.style.paddingTop = 10;
-            hud.style.paddingBottom = 8;
-            hud.style.paddingLeft = 12;
-            hud.style.paddingRight = 12;
-            page.Add(hud);
+            page.style.backgroundColor = Color.clear;
 
-            var status = new Label(
-                $"对局中  地图 {_gameMapId}  关 {_gameLevelId}")
-            { name = "Game_StatusLabel" };
-            status.style.fontSize = 16;
-            status.style.color = Color.white;
-            status.style.unityTextAlign = TextAnchor.MiddleCenter;
-            status.style.whiteSpace = WhiteSpace.Normal;
-            hud.Add(status);
-
-            _root.Add(page);
+            var status = page.Q<Label>("Game_StatusLabel");
+            if (status != null)
+                status.text = $"对局中  地图 {_gameMapId}  关 {_gameLevelId}";
         }
 
         // ---------- IMatch3Hud：与 Sprite 棋盘配合的顶栏 ----------

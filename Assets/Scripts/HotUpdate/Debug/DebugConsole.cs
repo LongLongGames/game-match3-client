@@ -34,7 +34,11 @@ namespace HotUpdate.DebugTools
         const int MaxLog = 80;
         bool _registered;
         GUIStyle _btnStyle;
-        Rect _win = new Rect(20, 40, 480, 520);
+        GUIStyle _titleStyle;
+        GUIStyle _statusStyle;
+        GUIStyle _labelStyle;
+        // 默认更大，避免手机/高 DPI 上看不清
+        Rect _win = new Rect(24, 48, 640, 720);
 
         public DebugConsole(
             IAuthService auth,
@@ -75,20 +79,57 @@ namespace HotUpdate.DebugTools
         public void OnGUI()
         {
             if (!_open || !IsDebugEnv()) return;
-            if (_btnStyle == null)
-                _btnStyle = new GUIStyle(GUI.skin.button) { fontSize = 12, alignment = TextAnchor.MiddleLeft };
-            _win = GUI.Window(0xD3B06, _win, DrawWindow, "HotUpdate DebugConsole");
+            EnsureStyles();
+            _win = GUI.Window(0xD3B06, _win, DrawWindow, "HotUpdate DebugConsole  (F12/~)");
+        }
+
+        void EnsureStyles()
+        {
+            if (_btnStyle != null) return;
+            _btnStyle = new GUIStyle(GUI.skin.button)
+            {
+                fontSize = 16,
+                alignment = TextAnchor.MiddleLeft,
+                fixedHeight = 32,
+                padding = new RectOffset(10, 10, 4, 4)
+            };
+            _titleStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 18,
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = Color.white }
+            };
+            _statusStyle = new GUIStyle(GUI.skin.box)
+            {
+                fontSize = 18,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleLeft,
+                padding = new RectOffset(12, 12, 8, 8),
+                normal = { textColor = new Color(0.2f, 1f, 0.45f, 1f) }
+            };
+            _labelStyle = new GUIStyle(GUI.skin.label) { fontSize = 15 };
         }
 
         void DrawWindow(int id)
         {
             GUILayout.BeginVertical();
-            GUILayout.Label("热更临时函数：DebugCmd.Reg(\"name\", \"help\", () => {...})");
+
+            // ---- 当前 UI 状态（常驻，不用敲命令）----
+            var panel = _ui != null ? _ui.CurrentPanel.ToString() : "?";
+            var asset = _ui?.CurrentUIAsset;
+            var status = string.IsNullOrEmpty(asset)
+                ? $"当前界面: {panel}"
+                : $"当前界面: {panel}    资源: {asset}";
+            GUILayout.Box(status, _statusStyle, GUILayout.ExpandWidth(true), GUILayout.MinHeight(40));
+
+            GUILayout.Space(4);
+            GUILayout.Label("热更临时函数：DebugCmd.Reg(\"name\", \"help\", () => {...})", _labelStyle);
 
             GUILayout.BeginHorizontal();
             GUI.SetNextControlName("dbg_input");
-            _input = GUILayout.TextField(_input, GUILayout.ExpandWidth(true));
-            if (GUILayout.Button("Run", GUILayout.Width(56)))
+            var fieldStyle = new GUIStyle(GUI.skin.textField) { fontSize = 16, fixedHeight = 30 };
+            _input = GUILayout.TextField(_input, fieldStyle, GUILayout.ExpandWidth(true));
+            if (GUILayout.Button("Run", _btnStyle, GUILayout.Width(72)))
                 RunLine(_input);
             if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Return
                 && GUI.GetNameOfFocusedControl() == "dbg_input")
@@ -99,34 +140,35 @@ namespace HotUpdate.DebugTools
             GUILayout.EndHorizontal();
 
             if (!string.IsNullOrEmpty(_lastResult))
-                GUILayout.Label("-> " + _lastResult);
+                GUILayout.Label("-> " + _lastResult, _labelStyle);
 
-            _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.Height(280));
+            _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.Height(340));
             string cat = null;
             foreach (var e in DebugCmd.All)
             {
                 if (e.Category != cat)
                 {
                     cat = e.Category;
-                    GUILayout.Space(6);
-                    GUILayout.Label("[" + cat + "]");
+                    GUILayout.Space(8);
+                    GUILayout.Label("[" + cat + "]", _titleStyle);
                 }
-                if (GUILayout.Button(e.Name + "  --  " + e.Help, _btnStyle))
+                if (GUILayout.Button(e.Name + "  —  " + e.Help, _btnStyle))
                     RunLine(e.Name);
             }
             GUILayout.EndScrollView();
 
-            GUILayout.Label("Log");
+            GUILayout.Label("Log", _titleStyle);
             var sb = new StringBuilder();
             for (var i = Mathf.Max(0, _log.Count - 30); i < _log.Count; i++)
                 sb.AppendLine(_log[i]);
-            GUILayout.TextArea(sb.ToString(), GUILayout.Height(120));
+            var areaStyle = new GUIStyle(GUI.skin.textArea) { fontSize = 14 };
+            GUILayout.TextArea(sb.ToString(), areaStyle, GUILayout.Height(150));
 
-            if (GUILayout.Button("Close (F12 / ~)"))
+            if (GUILayout.Button("Close (F12 / ~)", _btnStyle, GUILayout.Height(36)))
                 _open = false;
 
             GUILayout.EndVertical();
-            GUI.DragWindow(new Rect(0, 0, 10000, 24));
+            GUI.DragWindow(new Rect(0, 0, 10000, 28));
         }
 
         void RunLine(string line)
@@ -158,6 +200,12 @@ namespace HotUpdate.DebugTools
                 foreach (var e in DebugCmd.All)
                     Log($"{e.Category}/{e.Name}: {e.Help}");
             }, "System");
+
+            DebugCmd.Reg("ui", "打印当前 UI 面板 / 资源名", () =>
+            {
+                Log($"CurrentPanel={_ui.CurrentPanel}");
+                Log($"CurrentUIAsset={_ui.CurrentUIAsset ?? "(null)"}");
+            }, "UI");
 
             DebugCmd.Reg("toast", "测试 Toast", () =>
             {

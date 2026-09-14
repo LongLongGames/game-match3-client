@@ -1,0 +1,8 @@
+﻿========== AB 依赖冗余检测 ==========
+扫描: Assets/Bundles
+Prefab: 0  阈值: ≥2
+单引用: 0  公用有Label: 0  公用无Label: 0
+
+[AutoFix] Common Atlas +0
+[AutoFix] 模块 Atlas +0
+[AutoFix] 非图公用仍需 Shared Label: 0

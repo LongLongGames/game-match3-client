@@ -1,0 +1,11 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+  <ui:VisualElement name="UI_Login" style="flex-grow: 1; justify-content: center; align-items: center; background-color: rgb(31, 31, 46);">
+    <ui:VisualElement name="Login_Card" style="width: 420px; padding-top: 32px; padding-bottom: 32px; padding-left: 28px; padding-right: 28px; background-color: rgb(46, 46, 66); border-top-left-radius: 12px; border-top-right-radius: 12px; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;">
+      <ui:Label name="Login_Title" text="登录" style="font-size: 36px; color: white; -unity-text-align: middle-center; margin-bottom: 28px; -unity-font-style: bold;" />
+      <ui:TextField name="Login_User" label="账号" value="test" style="margin-bottom: 12px; font-size: 18px; color: white;" />
+      <ui:TextField name="Login_Pass" label="密码" password="true" value="123456" style="margin-bottom: 24px; font-size: 18px; color: white;" />
+      <ui:Button name="Login_BtnSubmit" text="登录" style="height: 48px; font-size: 20px; background-color: rgb(64, 140, 242); color: white; margin-bottom: 12px;" />
+      <ui:Button name="Login_BtnOffline" text="离线进入（演示）" style="height: 44px; font-size: 16px; background-color: rgb(71, 71, 92); color: white;" />
+    </ui:VisualElement>
+  </ui:VisualElement>
+</ui:UXML>

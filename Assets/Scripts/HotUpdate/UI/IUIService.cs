@@ -7,6 +7,12 @@ namespace HotUpdate.UI
 {
     public interface IUIService
     {
+        /// <summary>当前正在展示的面板（切页时更新）。</summary>
+        UIPanel CurrentPanel { get; }
+
+        /// <summary>当前 AB/UXML 资源名，如 UI_Login；无则 null。</summary>
+        string CurrentUIAsset { get; }
+
         UniTask ShowPanelAsync(UIPanel panel, CancellationToken ct = default);
 
         /// <summary>兼容旧调用：走 Dialog（不整页清空）。</summary>
@@ -41,4 +47,3 @@ namespace HotUpdate.UI
         void PromptEnterLevel(int mapId, int levelId);
     }
 }
-

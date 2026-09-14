@@ -1,0 +1,8 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+  <!-- 透明壳：棋盘由 Sprite 绘制，UI 只负责顶部 HUD -->
+  <ui:VisualElement name="UI_Game" picking-mode="Ignore" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
+    <ui:VisualElement name="Game_HudBar" picking-mode="Ignore" style="position: absolute; left: 0; right: 0; top: 0; height: 96px; background-color: rgba(20, 23, 36, 0.82); padding-top: 10px; padding-bottom: 8px; padding-left: 12px; padding-right: 12px;">
+      <ui:Label name="Game_StatusLabel" text="对局中" style="font-size: 16px; color: white; -unity-text-align: middle-center; white-space: normal;" />
+    </ui:VisualElement>
+  </ui:VisualElement>
+</ui:UXML>

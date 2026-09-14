@@ -1,0 +1,5 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+  <ui:VisualElement name="UI_CheckUpdate" style="flex-grow: 1; justify-content: center; align-items: center; background-color: rgb(26, 26, 38);">
+    <ui:Label name="CheckUpdate_Label" text="检查更新中..." style="font-size: 22px; color: white; -unity-text-align: middle-center;" />
+  </ui:VisualElement>
+</ui:UXML>
