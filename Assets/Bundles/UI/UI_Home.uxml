@@ -1,15 +1,31 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <ui:VisualElement name="UI_Home" style="flex-grow: 1; flex-direction: column; background-color: rgb(46, 140, 71);">
-        <ui:VisualElement name="Home_Header" style="padding-top: 16px; padding-bottom: 8px; padding-left: 12px; padding-right: 12px;">
-            <ui:Label name="Home_Title" text="地图 1" style="font-size: 28px; -unity-font-style: bold; color: white; -unity-text-align: middle-center;"/>
-            <ui:VisualElement name="Home_EnergyBar" style="flex-direction: row; align-items: center; justify-content: center; margin-top: 8px; height: 28px;">
-                <ui:VisualElement name="Home_EnergyIcon" style="width: 28px; height: 28px; margin-right: 6px; background-image: url(&quot;project://database/Assets/Art/Sprites/icon_energy.png?fileID=-397063501290637687&amp;guid=e17956ee12a4baf478b3d63aab731227&amp;type=3#icon_energy_0&quot;); -unity-background-scale-mode: scale-to-fit;"/>
-                <ui:VisualElement name="Home_EnergyBarBg" style="flex-grow: 0; width: 140px; height: 16px; background-color: rgba(0, 0, 0, 0.35); border-top-left-radius: 8px; border-top-right-radius: 8px; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; overflow: hidden;">
-                    <ui:VisualElement name="Home_EnergyBarFill" style="width: 100%; height: 100%; background-color: rgb(80, 200, 120); border-top-left-radius: 8px; border-top-right-radius: 8px; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;"/>
+        <ui:VisualElement name="Home_Header" style="flex-direction: column; padding-top: 12px; padding-bottom: 8px; padding-left: 12px; padding-right: 12px;">
+            <!-- 顶部横向：体力 | 金币 | 邮件 | 设置 -->
+            <ui:VisualElement name="Home_TopBar" style="flex-direction: row; align-items: center; justify-content: space-between; height: 40px;">
+                <ui:VisualElement name="Home_LeftStats" style="flex-direction: row; align-items: center; flex-grow: 1;">
+                    <!-- 体力：icon + background 数值 -->
+                    <ui:VisualElement name="Home_EnergyGroup" style="flex-direction: row; align-items: center; margin-right: 16px;">
+                        <ui:VisualElement name="Home_EnergyIcon" style="width: 28px; height: 28px; margin-right: 4px; background-image: url(&quot;project://database/Assets/Art/Sprites/icon_energy.png?fileID=-397063501290637687&amp;guid=e17956ee12a4baf478b3d63aab731227&amp;type=3#icon_energy_0&quot;); -unity-background-scale-mode: scale-to-fit;"/>
+                        <ui:VisualElement name="Home_EnergyBg" style="min-width: 64px; height: 24px; padding-left: 8px; padding-right: 8px; background-color: rgba(0, 0, 0, 0.4); border-top-left-radius: 12px; border-top-right-radius: 12px; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; justify-content: center; align-items: center;">
+                            <ui:Label name="Home_EnergyText" text="30/30" style="font-size: 14px; color: rgb(242, 250, 255); -unity-font-style: bold; -unity-text-align: middle-center;"/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <!-- 金币：icon + background 数值 -->
+                    <ui:VisualElement name="Home_GoldGroup" style="flex-direction: row; align-items: center;">
+                        <ui:VisualElement name="Home_GoldIcon" style="width: 28px; height: 28px; margin-right: 4px; background-image: url(&quot;project://database/Assets/Art/Sprites/icon_gold.png?fileID=2312241255967906428&amp;guid=57b8ed65790c9a54893ec51903d3d4dc&amp;type=3#icon_gold_0&quot;); -unity-background-scale-mode: scale-to-fit;"/>
+                        <ui:VisualElement name="Home_GoldBg" style="min-width: 48px; height: 24px; padding-left: 8px; padding-right: 8px; background-color: rgba(0, 0, 0, 0.4); border-top-left-radius: 12px; border-top-right-radius: 12px; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; justify-content: center; align-items: center;">
+                            <ui:Label name="Home_GoldText" text="0" style="font-size: 14px; color: rgb(242, 250, 255); -unity-font-style: bold; -unity-text-align: middle-center;"/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
                 </ui:VisualElement>
-                <ui:Label name="Home_EnergyText" text="30/30" style="font-size: 14px; color: rgb(242, 250, 255); margin-left: 8px; -unity-font-style: bold; min-width: 48px;"/>
+                <ui:VisualElement name="Home_RightButtons" style="flex-direction: row; align-items: center;">
+                    <ui:Button name="Home_BtnMail" text="" style="width: 36px; height: 36px; margin-right: 8px; background-color: rgba(0, 0, 0, 0); background-image: url(&quot;project://database/Assets/Art/Sprites/icon_mail.png?fileID=287588969321924484&amp;guid=d27e649bd2d2e4841b1fd16a746f87f6&amp;type=3#icon_mail_0&quot;); -unity-background-scale-mode: scale-to-fit; border-left-width: 0; border-right-width: 0; border-top-width: 0; border-bottom-width: 0;"/>
+                    <ui:Button name="Home_BtnSettings" text="" style="width: 36px; height: 36px; background-color: rgba(0, 0, 0, 0); background-image: url(&quot;project://database/Assets/Art/Sprites/icon_settings.png?fileID=-461434991869414348&amp;guid=feab69bb55e742f4a8b8cadaf69825a6&amp;type=3#icon_settings_0&quot;); -unity-background-scale-mode: scale-to-fit; border-left-width: 0; border-right-width: 0; border-top-width: 0; border-bottom-width: 0;"/>
+                </ui:VisualElement>
             </ui:VisualElement>
-            <ui:Label name="Home_Status" text="金币 0    已解锁地图 1    本图进度 0/10" style="font-size: 14px; color: rgb(242, 250, 255); -unity-text-align: middle-center; white-space: normal; margin-top: 6px;"/>
+            <ui:Label name="Home_Title" text="地图 1" style="font-size: 28px; -unity-font-style: bold; color: white; -unity-text-align: middle-center; margin-top: 8px;"/>
+            <ui:Label name="Home_Status" text="已解锁地图 1    本图进度 0/10" style="font-size: 14px; color: rgb(242, 250, 255); -unity-text-align: middle-center; white-space: normal; margin-top: 4px;"/>
         </ui:VisualElement>
         <ui:VisualElement name="Home_PathArea" style="flex-grow: 1; position: relative; min-height: 520px; margin-left: 8px; margin-right: 8px;"/>
         <ui:VisualElement name="Home_BottomBar" style="flex-direction: row; justify-content: center; align-items: center; padding-top: 10px; padding-bottom: 18px; padding-left: 12px; padding-right: 12px; background-color: rgba(26, 71, 41, 0.85);">

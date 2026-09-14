@@ -765,21 +765,33 @@ namespace HotUpdate.UI
             if (title != null)
                 title.text = $"地图 {_homeMapId}";
 
-            // 体力血条：图标 + 进度填充 + 数值
-            var energyMax = Mathf.Max(1, _energyMax);
-            var ratio = Mathf.Clamp01((float)_energy / energyMax);
-            var fill = page.Q("Home_EnergyBarFill");
-            if (fill != null)
-                fill.style.width = Length.Percent(ratio * 100f);
+            // 顶部：体力 icon + 背景数值
             var energyText = page.Q<Label>("Home_EnergyText");
             if (energyText != null)
                 energyText.text = $"{_energy}/{_energyMax}";
+
+            // 顶部：金币 icon + 背景数值
+            var goldText = page.Q<Label>("Home_GoldText");
+            if (goldText != null)
+                goldText.text = _gold.ToString();
 
             var status = page.Q<Label>("Home_Status");
             if (status != null)
             {
                 status.text =
-                    $"金币 {_gold}    已解锁地图 {_unlockedMap}    本图进度 {_clearedOnMap}/{_levelsPerMap}";
+                    $"已解锁地图 {_unlockedMap}    本图进度 {_clearedOnMap}/{_levelsPerMap}";
+            }
+
+            // 邮件 / 设置 按钮（占位，后续可接功能）
+            var btnMail = page.Q<Button>("Home_BtnMail");
+            if (btnMail != null)
+            {
+                btnMail.clicked += () => { /* TODO: 打开邮件 */ };
+            }
+            var btnSettings = page.Q<Button>("Home_BtnSettings");
+            if (btnSettings != null)
+            {
+                btnSettings.clicked += () => { /* TODO: 打开设置 */ };
             }
 
             var pathArea = page.Q("Home_PathArea");
