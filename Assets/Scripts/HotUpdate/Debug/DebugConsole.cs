@@ -114,13 +114,15 @@ namespace HotUpdate.DebugTools
         {
             GUILayout.BeginVertical();
 
-            // ---- 当前 UI 状态（常驻，不用敲命令）----
+            // ---- 当前 UI 状态 + 资源加载模式（常驻）----
             var panel = _ui != null ? _ui.CurrentPanel.ToString() : "?";
             var asset = _ui?.CurrentUIAsset;
-            var status = string.IsNullOrEmpty(asset)
+            var uiLine = string.IsNullOrEmpty(asset)
                 ? $"当前界面: {panel}"
                 : $"当前界面: {panel}    资源: {asset}";
-            GUILayout.Box(status, _statusStyle, GUILayout.ExpandWidth(true), GUILayout.MinHeight(40));
+            var resLine = ResourceLoadMode.StatusText;
+            var status = uiLine + "\n" + resLine;
+            GUILayout.Box(status, _statusStyle, GUILayout.ExpandWidth(true), GUILayout.MinHeight(56));
 
             GUILayout.Space(4);
             GUILayout.Label("热更临时函数：DebugCmd.Reg(\"name\", \"help\", () => {...})", _labelStyle);

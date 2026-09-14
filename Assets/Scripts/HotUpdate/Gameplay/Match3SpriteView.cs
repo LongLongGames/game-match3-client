@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
+using HotUpdate.Services;
 
 namespace HotUpdate.Gameplay
 {
@@ -59,7 +60,7 @@ namespace HotUpdate.Gameplay
             using var reg = ct.Register(() => _tcs.TrySetCanceled());
 
             EnsureCamera();
-            BuildSprites();
+            await LoadSpritesAsync(ct);
             BuildBoard();
             RefreshHud();
             _hud?.ShowBoardChrome(cfg, OnGiveUp, OnShuffle);
@@ -145,12 +146,81 @@ namespace HotUpdate.Gameplay
             _cam = null;
         }
 
-        void BuildSprites()
+        /// <summary>
+        /// 棋子资源名，顺序对应 Match3Board.ColorCount 的 0..N-1。
+        /// 与 Assets/Bundles/Sprites 下文件名一致（无扩展名）。
+        /// </summary>
+        static readonly string[] SpriteAssetNames =
         {
-            if (_sprites != null) return;
-            _sprites = new Sprite[Colors.Length];
-            for (var i = 0; i < Colors.Length; i++)
-                _sprites[i] = MakeRoundedSprite(Colors[i], 64);
+            "gem_heart",   // 0 红
+            "gem_leaf",    // 1 绿
+            "gem_crystal", // 2 蓝
+            "gem_sun",     // 3 黄
+        };
+
+        /// <summary>
+        /// 从 Bundles/Sprites 加载棋子 Sprite。
+        /// Editor 优先 AssetDatabase；真机走 ResManager / AB。
+        /// 加载失败时回退运行时生成圆角色块，避免空引用。
+        /// </summary>
+        async UniTask LoadSpritesAsync(CancellationToken ct)
+        {
+            if (_sprites != null && _sprites.Length == SpriteAssetNames.Length
+                && _sprites[0] != null)
+                return;
+
+            _sprites = new Sprite[SpriteAssetNames.Length];
+            for (var i = 0; i < SpriteAssetNames.Length; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                var name = SpriteAssetNames[i];
+                Sprite sp = null;
+
+#if UNITY_EDITOR
+                {
+                    var path = $"Assets/Bundles/Sprites/{name}.png";
+                    // spriteMode=Multiple 时主资产可能不是 Sprite，需 LoadAll
+                    sp = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(path);
+                    if (sp == null)
+                    {
+                        var all = UnityEditor.AssetDatabase.LoadAllAssetsAtPath(path);
+                        if (all != null)
+                        {
+                            foreach (var o in all)
+                            {
+                                if (o is Sprite s) { sp = s; break; }
+                            }
+                        }
+                    }
+                    if (sp != null)
+                        ResourceLoadMode.SetEditor(name);
+                }
+#endif
+
+                if (sp == null)
+                {
+                    try
+                    {
+                        if (!ResManager.IsReady)
+                            await ResManager.InitializeAsync(ct);
+                        sp = await ResManager.LoadSpriteAsync(name, ct);
+                        if (sp != null)
+                            ResourceLoadMode.SetAssetBundle(name);
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogWarning($"[Match3SpriteView] AB 加载失败 {name}: {e.Message}");
+                    }
+                }
+
+                if (sp == null)
+                {
+                    Debug.LogWarning($"[Match3SpriteView] 资源缺失，回退程序生成: {name}");
+                    sp = MakeRoundedSprite(Colors[i % Colors.Length], 64);
+                }
+
+                _sprites[i] = sp;
+            }
         }
 
         static Sprite MakeRoundedSprite(Color color, int size)
@@ -172,7 +242,6 @@ namespace HotUpdate.Gameplay
                 if (d <= rr - 1.5f) a = 1f;
                 else if (d >= rr + 1.5f) a = 0f;
                 else a = 1f - Mathf.InverseLerp(rr - 1.5f, rr + 1.5f, d);
-                // 轻微内高光
                 var highlight = Mathf.Clamp01(1f - (d / rr)) * 0.18f;
                 var c = color;
                 c.r = Mathf.Clamp01(c.r + highlight);

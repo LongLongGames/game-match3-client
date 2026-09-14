@@ -32,7 +32,10 @@ namespace HotUpdate.UI
             vta = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
                 $"Assets/Bundles/UI/{assetName}.uxml");
             if (vta != null)
+            {
                 Debug.Log($"[UIPanelLoader] Editor AssetDatabase: {assetName}");
+                ResourceLoadMode.SetEditor(assetName);
+            }
 #endif
 
             if (vta == null)
@@ -43,6 +46,8 @@ namespace HotUpdate.UI
                     await ResManager.InitializeAsync(ct);
                 }
                 vta = await ResManager.LoadUIAsync(assetName, ct);
+                if (vta != null)
+                    ResourceLoadMode.SetAssetBundle(assetName);
             }
 
             if (vta == null)
