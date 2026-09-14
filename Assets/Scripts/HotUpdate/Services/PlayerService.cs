@@ -183,20 +183,70 @@ namespace HotUpdate.Services
         }
 
         /// <summary>
-        /// 进关扣体力（客户端先行）。服务端 start API 未就绪前只改本地。
+        /// 进关：优先 POST /api/v1/user/level/enter 由服务端扣体力并回写。
+        /// 无 token 时离线回退本地扣。失败不改本地（除离线路径）。
         /// </summary>
-        public bool TrySpendEnergyForEnter()
+        public async UniTask<(bool ok, string error)> EnterLevelAsync(int mapId, int levelId, CancellationToken ct = default)
         {
             var cost = GameRuleConfig.EnergyCostPerLevel;
             if (cost < 0) cost = 0;
-            if (Energy < cost)
+
+            // 无 token：离线模式，仅本地扣
+            if (string.IsNullOrEmpty(_http.AccessToken))
             {
-                Debug.LogWarning($"[Player] energy not enough: have={Energy} need={cost}");
-                return false;
+                if (Energy < cost)
+                {
+                    Debug.LogWarning($"[Player] offline energy not enough: have={Energy} need={cost}");
+                    return (false, "体力不足，请稍后再试");
+                }
+                Energy -= cost;
+                Debug.Log($"[Player] offline spend energy for enter: -{cost}, left={Energy}");
+                return (true, null);
             }
-            Energy -= cost;
-            Debug.Log($"[Player] spend energy for enter: -{cost}, left={Energy}");
-            return true;
+
+            try
+            {
+                var body = new EnterLevelRequest
+                {
+                    game_id = _config.GameId,
+                    map_id = mapId,
+                    level_id = levelId
+                };
+                var json = JsonUtility.ToJson(body);
+                var url = $"{_config.GameBaseUrl}/api/v1/user/level/enter";
+                var text = await _http.PostJsonAsync(url, json, auth: true, ct);
+                var resp = JsonUtility.FromJson<EnterLevelResponse>(text);
+                if (resp == null)
+                    return (false, "进关失败：空响应");
+
+                Energy = resp.energy;
+                if (resp.energy_max > 0)
+                    EnergyMax = resp.energy_max;
+                Gold = resp.gold;
+                if (resp.unlocked_map > 0)
+                    UnlockedMap = resp.unlocked_map;
+
+                Debug.Log($"[Player] enter OK map={mapId} lv={levelId} energy={Energy}/{EnergyMax} cost={resp.energy_cost}");
+                return (true, null);
+            }
+            catch (UnauthorizedException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                var msg = e.Message ?? "进关失败";
+                Debug.LogWarning("[Player] EnterLevel failed: " + msg);
+                if (msg.IndexOf("not enough energy", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return (false, "体力不足，请稍后再试");
+                if (msg.IndexOf("map locked", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return (false, "地图未解锁");
+                if (msg.IndexOf("previous level", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return (false, "关卡未解锁");
+                if (msg.IndexOf("level not in config", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return (false, "关卡配置不存在");
+                return (false, "进关失败：" + msg);
+            }
         }
 
         public async UniTask<ClearLevelResponse> ClearLevelAsync(

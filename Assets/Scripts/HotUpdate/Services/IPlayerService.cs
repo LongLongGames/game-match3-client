@@ -26,10 +26,11 @@ namespace HotUpdate.Services
         bool TryGetNextPlayableLevel(out int mapId, out int levelId);
 
         /// <summary>
-        /// 进关时扣除体力（客户端先行）。不足返回 false。
-        /// 服务端 start-level API 就绪后应在此对接。
+        /// 进关：POST /api/v1/user/level/enter 由服务端扣体力。
+        /// 成功 (true, null) 并同步本地；失败 (false, msg) 不进关。
+        /// 无 token 时离线本地扣体力。
         /// </summary>
-        bool TrySpendEnergyForEnter();
+        UniTask<(bool ok, string error)> EnterLevelAsync(int mapId, int levelId, CancellationToken ct = default);
 
         /// <summary>通关上报；不再在此处扣体力（进关已扣）</summary>
         UniTask<ClearLevelResponse> ClearLevelAsync(

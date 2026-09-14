@@ -111,9 +111,11 @@ namespace HotUpdate.AppFlow
                     return;
                 }
 
-                if (!_player.TrySpendEnergyForEnter())
+                // 服务端进关扣体力，成功才跳转
+                var (enterOk, enterErr) = await _player.EnterLevelAsync(mapId, levelId);
+                if (!enterOk)
                 {
-                    await _ui.ShowErrorAsync("体力不足，请稍后再试");
+                    await _ui.ShowErrorAsync(string.IsNullOrEmpty(enterErr) ? "进关失败" : enterErr);
                     return;
                 }
 
@@ -125,6 +127,7 @@ namespace HotUpdate.AppFlow
 
             _ui.SetStartLevelHandler(async (mapId, levelId) =>
             {
+                // 本地预检；真正扣体力以服务端 /level/enter 为准
                 if (_player.Energy < HotUpdate.Gameplay.GameRuleConfig.EnergyCostPerLevel)
                 {
                     await _ui.ShowErrorAsync("体力不足，请稍后再试");
@@ -134,7 +137,7 @@ namespace HotUpdate.AppFlow
                 if (levelId > 1)
                 {
                     var levels = _player.State?.levels;
-                    bool ok = false;
+                    bool unlocked = false;
                     var minStars = HotUpdate.Gameplay.GameRuleConfig.MinStarsToUnlockNextLevel;
                     if (levels != null)
                     {
@@ -142,21 +145,22 @@ namespace HotUpdate.AppFlow
                         {
                             if (item != null && item.level_id == levelId - 1 && item.stars >= minStars)
                             {
-                                ok = true;
+                                unlocked = true;
                                 break;
                             }
                         }
                     }
-                    if (!ok)
+                    if (!unlocked)
                     {
                         await _ui.ShowErrorAsync("关卡未解锁");
                         return;
                     }
                 }
 
-                if (!_player.TrySpendEnergyForEnter())
+                var (enterOk, enterErr) = await _player.EnterLevelAsync(mapId, levelId);
+                if (!enterOk)
                 {
-                    await _ui.ShowErrorAsync("体力不足，请稍后再试");
+                    await _ui.ShowErrorAsync(string.IsNullOrEmpty(enterErr) ? "进关失败" : enterErr);
                     return;
                 }
 

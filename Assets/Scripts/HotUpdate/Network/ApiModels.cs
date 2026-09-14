@@ -75,6 +75,29 @@ namespace HotUpdate.Network
     }
 
     [Serializable]
+    public class EnterLevelRequest
+    {
+        public string game_id;
+        public int map_id;
+        public int level_id;
+    }
+
+    [Serializable]
+    public class EnterLevelResponse
+    {
+        public string game_id;
+        public int map_id;
+        public int level_id;
+        public int energy;
+        public int energy_max;
+        public int energy_regen_seconds;
+        public int seconds_to_next;
+        public int energy_cost;
+        public long gold;
+        public int unlocked_map;
+    }
+
+    [Serializable]
     public class ClearLevelRequest
     {
         public string game_id;

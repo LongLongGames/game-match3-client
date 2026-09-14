@@ -38,7 +38,7 @@ namespace HotUpdate.DebugTools
         GUIStyle _statusStyle;
         GUIStyle _labelStyle;
         // 默认更大，避免手机/高 DPI 上看不清
-        Rect _win = new Rect(24, 48, 640, 720);
+        Rect _win = new Rect(20, 40, 720, 860);
 
         public DebugConsole(
             IAuthService auth,
@@ -88,50 +88,57 @@ namespace HotUpdate.DebugTools
             if (_btnStyle != null) return;
             _btnStyle = new GUIStyle(GUI.skin.button)
             {
-                fontSize = 16,
+                fontSize = 18,
                 alignment = TextAnchor.MiddleLeft,
-                fixedHeight = 32,
-                padding = new RectOffset(10, 10, 4, 4)
+                fixedHeight = 40,
+                padding = new RectOffset(12, 12, 6, 6)
             };
             _titleStyle = new GUIStyle(GUI.skin.label)
             {
-                fontSize = 18,
+                fontSize = 20,
                 fontStyle = FontStyle.Bold,
                 normal = { textColor = Color.white }
             };
             _statusStyle = new GUIStyle(GUI.skin.box)
             {
-                fontSize = 18,
+                fontSize = 20,
                 fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleLeft,
-                padding = new RectOffset(12, 12, 8, 8),
-                normal = { textColor = new Color(0.2f, 1f, 0.45f, 1f) }
+                alignment = TextAnchor.UpperLeft,
+                wordWrap = true,
+                padding = new RectOffset(14, 14, 12, 12),
+                normal = { textColor = new Color(0.25f, 1f, 0.5f, 1f) }
             };
-            _labelStyle = new GUIStyle(GUI.skin.label) { fontSize = 15 };
+            _labelStyle = new GUIStyle(GUI.skin.label) { fontSize = 16 };
         }
 
         void DrawWindow(int id)
         {
             GUILayout.BeginVertical();
 
-            // ---- 当前 UI 状态 + 资源加载模式（常驻）----
+            // ---- 当前 UI 状态 + Profile 名字 + 资源加载模式（常驻，分行大字）----
             var panel = _ui != null ? _ui.CurrentPanel.ToString() : "?";
             var asset = _ui?.CurrentUIAsset;
             var uiLine = string.IsNullOrEmpty(asset)
-                ? $"当前界面: {panel}"
-                : $"当前界面: {panel}    资源: {asset}";
+                ? $"界面: {panel}"
+                : $"界面: {panel}   |   资源: {asset}";
+            var nick = _player?.Profile?.nickname;
+            if (string.IsNullOrEmpty(nick)) nick = "(未拉取)";
+            var profileLine =
+                $"昵称: {nick}\n" +
+                $"体力: {_player?.Energy ?? 0}/{_player?.EnergyMax ?? 0}   |   金币: {_player?.Gold ?? 0}   |   地图: {_player?.UnlockedMap ?? 0}";
             var resLine = ResourceLoadMode.StatusText;
-            var status = uiLine + "\n" + resLine;
-            GUILayout.Box(status, _statusStyle, GUILayout.ExpandWidth(true), GUILayout.MinHeight(56));
+            var status = uiLine + "\n" + profileLine + "\n" + resLine;
+            GUILayout.Box(status, _statusStyle, GUILayout.ExpandWidth(true), GUILayout.MinHeight(110));
+
+            GUILayout.Space(8);
+            GUILayout.Label("热更命令：DebugCmd.Reg(\"name\", \"help\", () => {...})", _labelStyle);
 
             GUILayout.Space(4);
-            GUILayout.Label("热更临时函数：DebugCmd.Reg(\"name\", \"help\", () => {...})", _labelStyle);
-
             GUILayout.BeginHorizontal();
             GUI.SetNextControlName("dbg_input");
-            var fieldStyle = new GUIStyle(GUI.skin.textField) { fontSize = 16, fixedHeight = 30 };
+            var fieldStyle = new GUIStyle(GUI.skin.textField) { fontSize = 18, fixedHeight = 36 };
             _input = GUILayout.TextField(_input, fieldStyle, GUILayout.ExpandWidth(true));
-            if (GUILayout.Button("Run", _btnStyle, GUILayout.Width(72)))
+            if (GUILayout.Button("Run", _btnStyle, GUILayout.Width(90)))
                 RunLine(_input);
             if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Return
                 && GUI.GetNameOfFocusedControl() == "dbg_input")
@@ -144,14 +151,15 @@ namespace HotUpdate.DebugTools
             if (!string.IsNullOrEmpty(_lastResult))
                 GUILayout.Label("-> " + _lastResult, _labelStyle);
 
-            _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.Height(340));
+            GUILayout.Space(6);
+            _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.Height(360));
             string cat = null;
             foreach (var e in DebugCmd.All)
             {
                 if (e.Category != cat)
                 {
                     cat = e.Category;
-                    GUILayout.Space(8);
+                    GUILayout.Space(10);
                     GUILayout.Label("[" + cat + "]", _titleStyle);
                 }
                 if (GUILayout.Button(e.Name + "  —  " + e.Help, _btnStyle))
@@ -159,14 +167,16 @@ namespace HotUpdate.DebugTools
             }
             GUILayout.EndScrollView();
 
+            GUILayout.Space(6);
             GUILayout.Label("Log", _titleStyle);
             var sb = new StringBuilder();
             for (var i = Mathf.Max(0, _log.Count - 30); i < _log.Count; i++)
                 sb.AppendLine(_log[i]);
-            var areaStyle = new GUIStyle(GUI.skin.textArea) { fontSize = 14 };
-            GUILayout.TextArea(sb.ToString(), areaStyle, GUILayout.Height(150));
+            var areaStyle = new GUIStyle(GUI.skin.textArea) { fontSize = 15 };
+            GUILayout.TextArea(sb.ToString(), areaStyle, GUILayout.Height(160));
 
-            if (GUILayout.Button("Close (F12 / ~)", _btnStyle, GUILayout.Height(36)))
+            GUILayout.Space(4);
+            if (GUILayout.Button("Close (F12 / ~)", _btnStyle, GUILayout.Height(42)))
                 _open = false;
 
             GUILayout.EndVertical();
@@ -231,6 +241,27 @@ namespace HotUpdate.DebugTools
             DebugCmd.Reg("energy", "打印体力/金币", () =>
             {
                 Log($"energy={_player.Energy}/{_player.EnergyMax} gold={_player.Gold} map={_player.UnlockedMap}");
+            }, "Player");
+
+            DebugCmd.Reg("profile", "打印 profile（昵称/level 等）", () =>
+            {
+                var p = _player.Profile;
+                if (p == null)
+                {
+                    Log("profile=(null)");
+                    return;
+                }
+                Log($"nickname={p.nickname ?? "(null)"}");
+                Log($"level={p.level} id={p.id ?? "(null)"} game_id={p.game_id ?? "(null)"}");
+                Log($"mp_account_id={p.mp_account_id ?? "(null)"}");
+                Log($"extra_json={p.extra_json ?? "(null)"}");
+            }, "Player");
+
+            DebugCmd.RegAsync("refresh_profile", "重新拉取 profile", async (args, ct) =>
+            {
+                await _player.RefreshProfileAsync(ct);
+                var p = _player.Profile;
+                Log($"refreshed nickname={p?.nickname ?? "(null)"} level={p?.level ?? 0}");
             }, "Player");
 
             DebugCmd.RegAsync("refill", "体力 cheat-refill", async (args, ct) =>
