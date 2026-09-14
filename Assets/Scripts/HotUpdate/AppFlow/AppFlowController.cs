@@ -82,6 +82,8 @@ namespace HotUpdate.AppFlow
                 var (ok, err) = await _auth.LoginAsync(user, pass);
                 if (ok)
                 {
+                    // 仅登录成功时拉 profile + state，之后回 Home 用缓存
+                    await LoadPlayerDataAsync();
                     await GotoAsync(AppState.Home);
                     return;
                 }
@@ -257,6 +259,8 @@ namespace HotUpdate.AppFlow
                 var valid = await _auth.ValidateSessionAsync(ct);
                 if (valid)
                 {
+                    // 会话恢复成功：拉一次全量，之后回 Home 不再刷
+                    await LoadPlayerDataAsync(ct);
                     await GotoAsync(AppState.Home, ct);
                     return;
                 }
@@ -272,12 +276,18 @@ namespace HotUpdate.AppFlow
             await _ui.ShowPanelAsync(UIPanel.Login, ct);
         }
 
-        async UniTask OnHomeAsync(CancellationToken ct)
+        /// <summary>登录/会话恢复时拉 profile + state；回 Home 不要调。</summary>
+        async UniTask LoadPlayerDataAsync(CancellationToken ct = default)
         {
             await _player.RefreshProfileAsync(ct);
-
-            int mapId = _player.CurrentMapId > 0 ? _player.CurrentMapId : 1;
+            var mapId = _player.CurrentMapId > 0 ? _player.CurrentMapId : 1;
             await _player.RefreshStateAsync(mapId: mapId, ct);
+        }
+
+        async UniTask OnHomeAsync(CancellationToken ct)
+        {
+            // 只用内存缓存刷 UI；进关/通关已用接口返回体更新本地
+            int mapId = _player.CurrentMapId > 0 ? _player.CurrentMapId : 1;
 
             int nextLevelId = 1;
             if (_player.TryGetNextPlayableLevel(out var nextMap, out var nextLv))

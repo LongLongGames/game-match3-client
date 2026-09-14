@@ -227,6 +227,7 @@ namespace HotUpdate.Services
                     UnlockedMap = resp.unlocked_map;
 
                 Debug.Log($"[Player] enter OK map={mapId} lv={levelId} energy={Energy}/{EnergyMax} cost={resp.energy_cost}");
+                SyncStateCache(mapId);
                 return (true, null);
             }
             catch (UnauthorizedException)
@@ -290,11 +291,8 @@ namespace HotUpdate.Services
                 serverResp = JsonUtility.FromJson<ClearLevelResponse>(text);
                 if (serverResp != null)
                 {
-                    // 服务端若仍在 clear 扣体力，会把 energy 写回来；
-                    // 等服务端改为进关扣后，这里自然对齐。
-                    // 在双端规则切换期：以「本地已进关扣过」为准，取更低值，避免被服务器加回。
-                    if (serverResp.energy < Energy)
-                        Energy = serverResp.energy;
+                    // 通关不再扣体力；以服务端回写的 energy/gold/unlocked 为准
+                    Energy = serverResp.energy;
                     EnergyMax = serverResp.energy_max > 0 ? serverResp.energy_max : EnergyMax;
                     Gold = serverResp.gold;
                     UnlockedMap = serverResp.unlocked_map > 0 ? serverResp.unlocked_map : UnlockedMap;
@@ -305,6 +303,9 @@ namespace HotUpdate.Services
             {
                 Debug.LogWarning("[Player] ClearLevel server failed, kept local: " + e.Message);
             }
+
+            // 同步 State 缓存，回 Home 无需再 GET /state
+            SyncStateCache(mapId);
 
             return serverResp ?? new ClearLevelResponse
             {
@@ -319,6 +320,30 @@ namespace HotUpdate.Services
                 gold = Gold,
                 gold_gained = goldGain,
                 unlocked_map = UnlockedMap
+            };
+        }
+
+        /// <summary>用当前内存数据刷新 State，供 Home UI 使用（不打网络）。</summary>
+        void SyncStateCache(int mapId)
+        {
+            EnsureLocalLevels();
+            CurrentMapId = mapId > 0 ? mapId : CurrentMapId;
+            State = new PlayerStateResponse
+            {
+                game_id = _config.GameId,
+                energy = Energy,
+                energy_max = EnergyMax,
+                energy_regen_seconds = GameRuleConfig.EnergyRegenSeconds,
+                seconds_to_next_energy = State?.seconds_to_next_energy ?? 0,
+                gold = Gold,
+                unlocked_map = UnlockedMap,
+                map_id = CurrentMapId,
+                levels_per_map = GameRuleConfig.LevelsPerMap > 0
+                    ? GameRuleConfig.LevelsPerMap
+                    : LevelConfigTable.LevelsPerMap,
+                cleared_on_map = CountCleared(_localLevels),
+                map_unlock_clear_count = GameRuleConfig.MapUnlockNeedClears,
+                levels = _localLevels
             };
         }
     }
