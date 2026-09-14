@@ -6,6 +6,7 @@ using HotUpdate.Services;
 using HotUpdate.Gameplay;
 using HotUpdate.UI;
 using HotUpdate.AppFlow;
+using HotUpdate.DebugTools;
 
 namespace HotUpdate
 {
@@ -51,7 +52,9 @@ namespace HotUpdate
             builder.Register<IAppFlow, AppFlowController>(Lifetime.Singleton);
 
             // Input Test
-            builder.RegisterEntryPoint<DebugInputSystem>();
+            builder.RegisterEntryPoint<DebugConsole>();
+            // 旧快捷键保留可选
+            // builder.RegisterEntryPoint<DebugInputSystem>();
         }
     }
 }

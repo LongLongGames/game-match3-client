@@ -81,9 +81,18 @@ namespace HotUpdate.AppFlow
             {
                 var (ok, err) = await _auth.LoginAsync(user, pass);
                 if (ok)
+                {
                     await GotoAsync(AppState.Home);
+                    return;
+                }
+
+                Debug.LogWarning("Login fail: " + err);
+                var msg = FormatLoginError(err);
+                // 网络/服务器问题用 Dialog，一般错误用 Toast
+                if (IsNetworkLikeError(err))
+                    await _ui.ShowDialogAsync(msg, title: "登录失败");
                 else
-                    Debug.LogWarning("Login fail: " + err);
+                    _ui.ShowToast(msg);
             });
 
             _ui.SetOfflineEnterHandler(async () =>
@@ -302,15 +311,89 @@ namespace HotUpdate.AppFlow
             await _ui.ShowPanelAsync(UIPanel.Game, ct);
 
             var result = await _match3.PlayAsync(cfg, ct);
+
+            // 结算弹窗（仍在 Game 页上）
+            await _ui.ShowLevelResultAsync(
+                result.Success,
+                result.Stars,
+                result.Score,
+                result.Steps,
+                ct);
+
             if (result.Success)
             {
                 Debug.Log($"[AppFlow] clear map={result.MapId} lv={result.LevelId} stars={result.Stars} steps={result.Steps} score={result.Score}");
                 await _player.ClearLevelAsync(
                     result.MapId, result.LevelId, result.Stars, result.Steps, result.Score, ct);
-                await _leaderboard.SubmitScoreAsync(result.Score, ct);
+                try
+                {
+                    await _leaderboard.SubmitScoreAsync(result.Score, ct);
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning("[AppFlow] submit score fail: " + e.Message);
+                }
+            }
+
+            // 回主页后要弹「是否进入」的目标关
+            int promptMap = mapId;
+            int promptLevel = levelId;
+            if (result.Success)
+            {
+                // 成功：指向当前可打的最高/下一关
+                if (_player.TryGetNextPlayableLevel(out var nm, out var nl))
+                {
+                    promptMap = nm;
+                    promptLevel = nl;
+                }
+                else
+                {
+                    // 体力不足或已通关本图：仍提示下一关号（尽量 +1）
+                    promptLevel = Mathf.Min(levelId + 1, LevelConfigTable.LevelsPerMap);
+                    promptMap = mapId;
+                }
+            }
+            else
+            {
+                // 失败：当前关重打
+                promptMap = mapId;
+                promptLevel = levelId;
             }
 
             await GotoAsync(AppState.Home, ct);
+            // 主页已刷完，高亮并弹确认
+            _ui.PromptEnterLevel(promptMap, promptLevel);
         }
+
+        static bool IsNetworkLikeError(string err)
+        {
+            if (string.IsNullOrEmpty(err)) return true;
+            var e = err.ToLowerInvariant();
+            return e.Contains("connect")
+                || e.Contains("timeout")
+                || e.Contains("connection")
+                || e.Contains("refused")
+                || e.Contains("unreachable")
+                || e.Contains("name resolution")
+                || e.Contains("socket")
+                || e.Contains("http")
+                || e.Contains("network")
+                || e.Contains("host")
+                || e.Contains("ssl")
+                || e.Contains("403")
+                || e.Contains("502")
+                || e.Contains("503")
+                || e.Contains("504");
+        }
+
+        static string FormatLoginError(string err)
+        {
+            if (string.IsNullOrEmpty(err))
+                return "登录失败，请稍后重试。";
+            if (IsNetworkLikeError(err))
+                return "无法连接服务器，请确认服务已启动或检查网络。\n\n详情：" + err;
+            return "登录失败：" + err;
+        }
+
     }
 }

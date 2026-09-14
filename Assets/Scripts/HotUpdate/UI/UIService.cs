@@ -34,6 +34,7 @@ namespace HotUpdate.UI
         int _homeMapId = 1;
         LevelProgressItem[] _homeLevels;
         int _nextLevelId = 1;
+        int _focusLevelId; // 回主页时高亮并弹确认的关卡
 
         // 非破坏性 tip（不整页清空）
         VisualElement _tipRoot;
@@ -118,19 +119,279 @@ namespace HotUpdate.UI
             await UniTask.Yield(ct);
         }
 
-        public async UniTask ShowErrorAsync(string message, CancellationToken ct = default)
+        public UniTask ShowErrorAsync(string message, CancellationToken ct = default)
         {
-            EnsureDoc();
-            _root.Clear();
-            var label = new Label($"错误: {message}") { name = "UI_Error" };
-            label.style.fontSize = 24;
-            label.style.color = Color.red;
-            label.style.unityTextAlign = TextAnchor.MiddleCenter;
-            label.style.flexGrow = 1;
-            _root.Add(label);
-            await UniTask.Delay(2000, cancellationToken: ct);
+            return ShowDialogAsync(message, title: "提示", okText: "确定", ct: ct);
         }
 
+        public void ShowToast(string message, float seconds = 2f)
+        {
+            ShowTip(message, seconds);
+        }
+
+        public async UniTask ShowDialogAsync(string message, string title = null, string okText = "确定", CancellationToken ct = default)
+        {
+            EnsureDoc();
+            // 去掉旧弹窗
+            _root.Q("UI_Dialog")?.RemoveFromHierarchy();
+
+            var tcs = new UniTaskCompletionSource();
+            using var reg = ct.Register(() => tcs.TrySetCanceled());
+
+            var mask = new VisualElement { name = "UI_Dialog" };
+            mask.style.position = Position.Absolute;
+            mask.style.left = 0;
+            mask.style.right = 0;
+            mask.style.top = 0;
+            mask.style.bottom = 0;
+            mask.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
+            mask.style.justifyContent = Justify.Center;
+            mask.style.alignItems = Align.Center;
+            mask.pickingMode = PickingMode.Position;
+
+            var card = new VisualElement { name = "UI_Dialog_Card" };
+            card.style.width = 340;
+            card.style.maxWidth = Length.Percent(90);
+            card.style.paddingTop = 20;
+            card.style.paddingBottom = 18;
+            card.style.paddingLeft = 20;
+            card.style.paddingRight = 20;
+            card.style.backgroundColor = new Color(0.16f, 0.18f, 0.24f, 1f);
+            card.style.borderTopLeftRadius = 12;
+            card.style.borderTopRightRadius = 12;
+            card.style.borderBottomLeftRadius = 12;
+            card.style.borderBottomRightRadius = 12;
+            card.style.alignItems = Align.Stretch;
+
+            if (!string.IsNullOrEmpty(title))
+            {
+                var titleLabel = new Label(title) { name = "UI_Dialog_Title" };
+                titleLabel.style.fontSize = 20;
+                titleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+                titleLabel.style.color = Color.white;
+                titleLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+                titleLabel.style.marginBottom = 12;
+                card.Add(titleLabel);
+            }
+
+            var body = new Label(message ?? "") { name = "UI_Dialog_Body" };
+            body.style.fontSize = 16;
+            body.style.color = new Color(0.92f, 0.93f, 0.96f, 1f);
+            body.style.whiteSpace = WhiteSpace.Normal;
+            body.style.unityTextAlign = TextAnchor.MiddleCenter;
+            body.style.marginBottom = 18;
+            card.Add(body);
+
+            var ok = new Button { text = string.IsNullOrEmpty(okText) ? "确定" : okText, name = "UI_Dialog_Ok" };
+            ok.style.height = 42;
+            ok.style.fontSize = 16;
+            ok.style.backgroundColor = new Color(0.25f, 0.55f, 0.95f, 1f);
+            ok.style.color = Color.white;
+            ok.style.borderTopLeftRadius = 8;
+            ok.style.borderTopRightRadius = 8;
+            ok.style.borderBottomLeftRadius = 8;
+            ok.style.borderBottomRightRadius = 8;
+            ok.clicked += () =>
+            {
+                mask.RemoveFromHierarchy();
+                tcs.TrySetResult();
+            };
+            card.Add(ok);
+
+            mask.Add(card);
+            _root.Add(mask);
+
+            try
+            {
+                await tcs.Task;
+            }
+            catch (OperationCanceledException)
+            {
+                mask.RemoveFromHierarchy();
+                throw;
+            }
+        }
+
+
+
+        public async UniTask ShowLevelResultAsync(bool success, int stars, int score, int steps, CancellationToken ct = default)
+        {
+            EnsureDoc();
+            _root.Q("UI_LevelResult")?.RemoveFromHierarchy();
+
+            var tcs = new UniTaskCompletionSource();
+            using var reg = ct.Register(() => tcs.TrySetCanceled());
+
+            var mask = new VisualElement { name = "UI_LevelResult" };
+            mask.style.position = Position.Absolute;
+            mask.style.left = 0;
+            mask.style.right = 0;
+            mask.style.top = 0;
+            mask.style.bottom = 0;
+            mask.style.backgroundColor = new Color(0f, 0f, 0f, 0.6f);
+            mask.style.justifyContent = Justify.Center;
+            mask.style.alignItems = Align.Center;
+            mask.pickingMode = PickingMode.Position;
+
+            var card = new VisualElement { name = "UI_LevelResult_Card" };
+            card.style.width = 360;
+            card.style.maxWidth = Length.Percent(92);
+            card.style.paddingTop = 28;
+            card.style.paddingBottom = 22;
+            card.style.paddingLeft = 22;
+            card.style.paddingRight = 22;
+            card.style.backgroundColor = new Color(0.14f, 0.16f, 0.22f, 1f);
+            card.style.borderTopLeftRadius = 14;
+            card.style.borderTopRightRadius = 14;
+            card.style.borderBottomLeftRadius = 14;
+            card.style.borderBottomRightRadius = 14;
+            card.style.alignItems = Align.Center;
+
+            if (success)
+            {
+                var title = new Label("过关！") { name = "LevelResult_Title" };
+                title.style.fontSize = 28;
+                title.style.unityFontStyleAndWeight = FontStyle.Bold;
+                title.style.color = new Color(1f, 0.9f, 0.3f, 1f);
+                title.style.marginBottom = 12;
+                card.Add(title);
+
+                // 0~3 星
+                stars = Mathf.Clamp(stars, 0, 3);
+                var starRow = new VisualElement();
+                starRow.style.flexDirection = FlexDirection.Row;
+                starRow.style.justifyContent = Justify.Center;
+                starRow.style.marginBottom = 14;
+                for (var i = 0; i < 3; i++)
+                {
+                    var s = new Label(i < stars ? "★" : "☆");
+                    s.style.fontSize = 36;
+                    s.style.color = i < stars
+                        ? new Color(1f, 0.85f, 0.15f, 1f)
+                        : new Color(0.45f, 0.45f, 0.5f, 1f);
+                    s.style.marginLeft = 6;
+                    s.style.marginRight = 6;
+                    starRow.Add(s);
+                }
+                card.Add(starRow);
+
+                var info = new Label($"得分 {score}    步数 {steps}") { name = "LevelResult_Info" };
+                info.style.fontSize = 15;
+                info.style.color = new Color(0.9f, 0.92f, 0.95f, 1f);
+                info.style.marginBottom = 20;
+                card.Add(info);
+
+                var next = new Button { text = "下一局", name = "LevelResult_Next" };
+                next.style.height = 48;
+                next.style.width = 200;
+                next.style.fontSize = 18;
+                next.style.backgroundColor = new Color(0.2f, 0.7f, 0.4f, 1f);
+                next.style.color = Color.white;
+                next.style.borderTopLeftRadius = 10;
+                next.style.borderTopRightRadius = 10;
+                next.style.borderBottomLeftRadius = 10;
+                next.style.borderBottomRightRadius = 10;
+                next.clicked += () =>
+                {
+                    mask.RemoveFromHierarchy();
+                    tcs.TrySetResult();
+                };
+                card.Add(next);
+            }
+            else
+            {
+                // 右上角 X
+                var topBar = new VisualElement();
+                topBar.style.width = Length.Percent(100);
+                topBar.style.flexDirection = FlexDirection.Row;
+                topBar.style.justifyContent = Justify.FlexEnd;
+                topBar.style.marginBottom = 4;
+                var closeX = new Button { text = "✕", name = "LevelResult_CloseX" };
+                closeX.style.width = 36;
+                closeX.style.height = 36;
+                closeX.style.fontSize = 18;
+                closeX.style.backgroundColor = new Color(0.35f, 0.35f, 0.4f, 1f);
+                closeX.style.color = Color.white;
+                closeX.style.borderTopLeftRadius = 8;
+                closeX.style.borderTopRightRadius = 8;
+                closeX.style.borderBottomLeftRadius = 8;
+                closeX.style.borderBottomRightRadius = 8;
+                closeX.clicked += () =>
+                {
+                    mask.RemoveFromHierarchy();
+                    tcs.TrySetResult();
+                };
+                topBar.Add(closeX);
+                card.Add(topBar);
+
+                var title = new Label("步数已耗尽") { name = "LevelResult_Title" };
+                title.style.fontSize = 26;
+                title.style.unityFontStyleAndWeight = FontStyle.Bold;
+                title.style.color = new Color(1f, 0.45f, 0.4f, 1f);
+                title.style.marginBottom = 12;
+                card.Add(title);
+
+                var info = new Label($"得分 {score}    已用步数 {steps}") { name = "LevelResult_Info" };
+                info.style.fontSize = 15;
+                info.style.color = new Color(0.9f, 0.92f, 0.95f, 1f);
+                info.style.marginBottom = 8;
+                card.Add(info);
+
+                var hint = new Label("点击右上角关闭，返回主页") { name = "LevelResult_Hint" };
+                hint.style.fontSize = 13;
+                hint.style.color = new Color(0.7f, 0.72f, 0.78f, 1f);
+                card.Add(hint);
+            }
+
+            mask.Add(card);
+            _root.Add(mask);
+            mask.BringToFront();
+
+            try { await tcs.Task; }
+            catch (OperationCanceledException)
+            {
+                mask.RemoveFromHierarchy();
+                throw;
+            }
+        }
+
+        public void PromptEnterLevel(int mapId, int levelId)
+        {
+            _focusLevelId = levelId;
+            // 高亮已建好的关卡按钮
+            HighlightLevelButton(levelId);
+            ShowEnterConfirm(mapId, levelId);
+        }
+
+        void HighlightLevelButton(int levelId)
+        {
+            if (_root == null) return;
+            for (var i = 1; i <= 10; i++)
+            {
+                var btn = _root.Q<Button>($"Home_Level_{i}");
+                if (btn == null) continue;
+                if (i == levelId)
+                {
+                    btn.style.borderTopWidth = 3;
+                    btn.style.borderBottomWidth = 3;
+                    btn.style.borderLeftWidth = 3;
+                    btn.style.borderRightWidth = 3;
+                    btn.style.borderTopColor = Color.white;
+                    btn.style.borderBottomColor = Color.white;
+                    btn.style.borderLeftColor = Color.white;
+                    btn.style.borderRightColor = Color.white;
+                    btn.style.scale = new Scale(new Vector3(1.08f, 1.08f, 1f));
+                }
+                else
+                {
+                    btn.style.borderTopWidth = 0;
+                    btn.style.borderBottomWidth = 0;
+                    btn.style.borderLeftWidth = 0;
+                    btn.style.borderRightWidth = 0;
+                    btn.style.scale = new Scale(Vector3.one);
+                }
+            }
+        }
 
         /// <summary>
         /// 进入关卡确认层（防误点）。确认后才回调 _onStartLevel。
@@ -216,19 +477,18 @@ namespace HotUpdate.UI
 
         public void ShowTip(string message, float seconds)
         {
-            if (_tipLabel == null || _tipRoot == null)
-            {
-                Debug.Log("[UI Tip] " + message);
-                return;
-            }
+            EnsureDoc();
+            EnsureToast();
 
             _tipCts?.Cancel();
             _tipCts = new CancellationTokenSource();
             var ct = _tipCts.Token;
 
-            _tipLabel.text = message;
+            _tipLabel.text = message ?? "";
             _tipRoot.style.display = DisplayStyle.Flex;
             _tipRoot.style.opacity = 1f;
+            // 提到最前，避免被页面盖住
+            _tipRoot.BringToFront();
 
             UniTask.Void(async () =>
             {
@@ -240,6 +500,41 @@ namespace HotUpdate.UI
                 }
                 catch (OperationCanceledException) { }
             });
+        }
+
+        void EnsureToast()
+        {
+            if (_tipRoot != null && _tipLabel != null && _tipRoot.parent == _root)
+                return;
+
+            _root.Q("UI_Toast")?.RemoveFromHierarchy();
+
+            _tipRoot = new VisualElement { name = "UI_Toast" };
+            _tipRoot.style.position = Position.Absolute;
+            _tipRoot.style.left = 16;
+            _tipRoot.style.right = 16;
+            _tipRoot.style.bottom = 48;
+            _tipRoot.style.paddingTop = 12;
+            _tipRoot.style.paddingBottom = 12;
+            _tipRoot.style.paddingLeft = 16;
+            _tipRoot.style.paddingRight = 16;
+            _tipRoot.style.backgroundColor = new Color(0.08f, 0.09f, 0.12f, 0.94f);
+            _tipRoot.style.borderTopLeftRadius = 10;
+            _tipRoot.style.borderTopRightRadius = 10;
+            _tipRoot.style.borderBottomLeftRadius = 10;
+            _tipRoot.style.borderBottomRightRadius = 10;
+            _tipRoot.style.alignItems = Align.Center;
+            _tipRoot.style.display = DisplayStyle.None;
+            _tipRoot.pickingMode = PickingMode.Ignore;
+
+            _tipLabel = new Label { name = "UI_Toast_Label" };
+            _tipLabel.style.fontSize = 15;
+            _tipLabel.style.color = Color.white;
+            _tipLabel.style.whiteSpace = WhiteSpace.Normal;
+            _tipLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _tipLabel.pickingMode = PickingMode.Ignore;
+            _tipRoot.Add(_tipLabel);
+            _root.Add(_tipRoot);
         }
 
         void EnsureDoc()
@@ -508,6 +803,19 @@ namespace HotUpdate.UI
                     ShowEnterConfirm(capturedMap, capturedLevel);
                 };
 
+                if (_focusLevelId == levelId)
+                {
+                    btn.style.borderTopWidth = 3;
+                    btn.style.borderBottomWidth = 3;
+                    btn.style.borderLeftWidth = 3;
+                    btn.style.borderRightWidth = 3;
+                    btn.style.borderTopColor = Color.white;
+                    btn.style.borderBottomColor = Color.white;
+                    btn.style.borderLeftColor = Color.white;
+                    btn.style.borderRightColor = Color.white;
+                    btn.style.scale = new Scale(new Vector3(1.08f, 1.08f, 1f));
+                }
+
                 pathArea.Add(btn);
             }
 
@@ -558,7 +866,7 @@ namespace HotUpdate.UI
             rootCol.Add(bottom);
 
             // ---- 非破坏 tip 浮层 ----
-            _tipRoot = new VisualElement { name = "Home_Tip" };
+            _tipRoot = new VisualElement { name = "UI_Toast" };
             _tipRoot.style.position = Position.Absolute;
             _tipRoot.style.left = Length.Percent(10);
             _tipRoot.style.right = Length.Percent(10);

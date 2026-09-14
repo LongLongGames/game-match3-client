@@ -41,6 +41,7 @@ namespace HotUpdate.Gameplay
         CameraClearFlags _savedClearFlags;
         Color _savedBgColor;
         float _savedNear, _savedFar;
+        Vector3 _savedCamPos;
 
         public Match3SpriteView(IMatch3Hud hud = null)
         {
@@ -101,12 +102,21 @@ namespace HotUpdate.Gameplay
                 _savedBgColor = _cam.backgroundColor;
                 _savedNear = _cam.nearClipPlane;
                 _savedFar = _cam.farClipPlane;
+                _savedCamPos = _cam.transform.position;
                 _camSaved = true;
             }
 
             _cam.orthographic = true;
             _cam.clearFlags = CameraClearFlags.SolidColor;
             _cam.backgroundColor = new Color(0.10f, 0.12f, 0.18f, 1f);
+            // 镜头拉到 z=-1（棋子仍在 z=0，避免跑到相机后面）
+            var cp = _cam.transform.position;
+            _cam.transform.position = new Vector3(cp.x, cp.y, -1f);
+            // 相机太近时默认 near=0.3 仍能看到 z=0；保险收一下
+            if (_cam.nearClipPlane > 0.1f)
+                _cam.nearClipPlane = 0.1f;
+            if (_cam.farClipPlane < 50f)
+                _cam.farClipPlane = 50f;
         }
 
         void RestoreCamera()
@@ -129,6 +139,7 @@ namespace HotUpdate.Gameplay
                 _cam.backgroundColor = _savedBgColor;
                 _cam.nearClipPlane = _savedNear;
                 _cam.farClipPlane = _savedFar;
+                _cam.transform.position = _savedCamPos;
             }
             _camSaved = false;
             _cam = null;
@@ -178,11 +189,13 @@ namespace HotUpdate.Gameplay
         {
             TeardownBoardOnly();
             _root = new GameObject("Match3BoardRoot");
+            _root.transform.position = Vector3.zero;
             var w = _board.Width;
             var h = _board.Height;
             // 适配视野
             var span = Mathf.Max(w, h) * _cellWorld;
-            _cam.orthographicSize = span * 0.55f + 1.2f;
+            // 固定 7，避免 9x9 构图出血；后续可按关卡配置再调
+            _cam.orthographicSize = 7f;
             _originX = -(w - 1) * _cellWorld * 0.5f;
             _originY = -(h - 1) * _cellWorld * 0.5f;
 

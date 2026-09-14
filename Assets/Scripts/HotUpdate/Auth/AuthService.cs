@@ -52,7 +52,13 @@ namespace HotUpdate.Auth
             }
             catch (Exception e)
             {
-                return (false, e.Message);
+                var msg = e.Message;
+                if (string.IsNullOrEmpty(msg))
+                    msg = e.GetType().Name;
+                // 带上内层异常，方便判断 Connection refused / Timeout
+                if (e.InnerException != null && !string.IsNullOrEmpty(e.InnerException.Message))
+                    msg = msg + " | " + e.InnerException.Message;
+                return (false, msg);
             }
         }
 
