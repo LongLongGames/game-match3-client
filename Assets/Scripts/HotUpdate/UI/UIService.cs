@@ -246,6 +246,118 @@ namespace HotUpdate.UI
 
 
 
+        /// <summary>是/否确认框。返回 true = 点「是」。</summary>
+        public async UniTask<bool> ShowConfirmAsync(
+            string message,
+            string title = null,
+            string yesText = "是",
+            string noText = "否",
+            CancellationToken ct = default)
+        {
+            EnsureDoc();
+            _root.Q("UI_Dialog")?.RemoveFromHierarchy();
+
+            var tcs = new UniTaskCompletionSource<bool>();
+            using var reg = ct.Register(() => tcs.TrySetCanceled());
+
+            var mask = new VisualElement { name = "UI_Dialog" };
+            mask.style.position = Position.Absolute;
+            mask.style.left = 0;
+            mask.style.right = 0;
+            mask.style.top = 0;
+            mask.style.bottom = 0;
+            mask.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
+            mask.style.justifyContent = Justify.Center;
+            mask.style.alignItems = Align.Center;
+            mask.pickingMode = PickingMode.Position;
+
+            var card = new VisualElement { name = "UI_Dialog_Card" };
+            card.style.width = 340;
+            card.style.maxWidth = Length.Percent(90);
+            card.style.paddingTop = 20;
+            card.style.paddingBottom = 18;
+            card.style.paddingLeft = 20;
+            card.style.paddingRight = 20;
+            card.style.backgroundColor = new Color(0.16f, 0.18f, 0.24f, 1f);
+            card.style.borderTopLeftRadius = 12;
+            card.style.borderTopRightRadius = 12;
+            card.style.borderBottomLeftRadius = 12;
+            card.style.borderBottomRightRadius = 12;
+            card.style.alignItems = Align.Stretch;
+
+            if (!string.IsNullOrEmpty(title))
+            {
+                var titleLabel = new Label(title) { name = "UI_Dialog_Title" };
+                titleLabel.style.fontSize = 20;
+                titleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+                titleLabel.style.color = Color.white;
+                titleLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+                titleLabel.style.marginBottom = 12;
+                card.Add(titleLabel);
+            }
+
+            var body = new Label(message ?? "") { name = "UI_Dialog_Body" };
+            body.style.fontSize = 16;
+            body.style.color = new Color(0.9f, 0.92f, 0.95f, 1f);
+            body.style.whiteSpace = WhiteSpace.Normal;
+            body.style.unityTextAlign = TextAnchor.MiddleCenter;
+            body.style.marginBottom = 18;
+            card.Add(body);
+
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.justifyContent = Justify.Center;
+
+            var noBtn = new Button { text = string.IsNullOrEmpty(noText) ? "否" : noText, name = "UI_Dialog_No" };
+            noBtn.style.height = 42;
+            noBtn.style.width = 120;
+            noBtn.style.fontSize = 16;
+            noBtn.style.marginRight = 12;
+            noBtn.style.backgroundColor = new Color(0.4f, 0.42f, 0.48f, 1f);
+            noBtn.style.color = Color.white;
+            noBtn.style.borderTopLeftRadius = 8;
+            noBtn.style.borderTopRightRadius = 8;
+            noBtn.style.borderBottomLeftRadius = 8;
+            noBtn.style.borderBottomRightRadius = 8;
+            noBtn.clicked += () =>
+            {
+                mask.RemoveFromHierarchy();
+                tcs.TrySetResult(false);
+            };
+            row.Add(noBtn);
+
+            var yesBtn = new Button { text = string.IsNullOrEmpty(yesText) ? "是" : yesText, name = "UI_Dialog_Yes" };
+            yesBtn.style.height = 42;
+            yesBtn.style.width = 120;
+            yesBtn.style.fontSize = 16;
+            yesBtn.style.backgroundColor = new Color(0.85f, 0.35f, 0.35f, 1f);
+            yesBtn.style.color = Color.white;
+            yesBtn.style.borderTopLeftRadius = 8;
+            yesBtn.style.borderTopRightRadius = 8;
+            yesBtn.style.borderBottomLeftRadius = 8;
+            yesBtn.style.borderBottomRightRadius = 8;
+            yesBtn.clicked += () =>
+            {
+                mask.RemoveFromHierarchy();
+                tcs.TrySetResult(true);
+            };
+            row.Add(yesBtn);
+
+            card.Add(row);
+            mask.Add(card);
+            _root.Add(mask);
+
+            try
+            {
+                return await tcs.Task;
+            }
+            catch (OperationCanceledException)
+            {
+                mask.RemoveFromHierarchy();
+                throw;
+            }
+        }
+
         public async UniTask ShowLevelResultAsync(bool success, int stars, int score, int steps, CancellationToken ct = default)
         {
             EnsureDoc();
@@ -653,12 +765,21 @@ namespace HotUpdate.UI
             if (title != null)
                 title.text = $"地图 {_homeMapId}";
 
+            // 体力血条：图标 + 进度填充 + 数值
+            var energyMax = Mathf.Max(1, _energyMax);
+            var ratio = Mathf.Clamp01((float)_energy / energyMax);
+            var fill = page.Q("Home_EnergyBarFill");
+            if (fill != null)
+                fill.style.width = Length.Percent(ratio * 100f);
+            var energyText = page.Q<Label>("Home_EnergyText");
+            if (energyText != null)
+                energyText.text = $"{_energy}/{_energyMax}";
+
             var status = page.Q<Label>("Home_Status");
             if (status != null)
             {
                 status.text =
-                    $"体力 {_energy}/{_energyMax}    金币 {_gold}\n" +
-                    $"已解锁地图 {_unlockedMap}    本图进度 {_clearedOnMap}/{_levelsPerMap}";
+                    $"金币 {_gold}    已解锁地图 {_unlockedMap}    本图进度 {_clearedOnMap}/{_levelsPerMap}";
             }
 
             var pathArea = page.Q("Home_PathArea");
@@ -674,7 +795,14 @@ namespace HotUpdate.UI
 
             var logout = page.Q<Button>("Home_BtnLogout");
             if (logout != null)
-                logout.clicked += () => _onLogout?.Invoke();
+            {
+                logout.clicked += async () =>
+                {
+                    var ok = await ShowConfirmAsync("确定要退出登录吗？", title: "退出登录", yesText: "是", noText: "否");
+                    if (ok)
+                        _onLogout?.Invoke();
+                };
+            }
         }
 
         /// <summary>

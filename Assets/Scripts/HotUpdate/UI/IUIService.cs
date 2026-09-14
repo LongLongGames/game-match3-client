@@ -24,6 +24,9 @@ namespace HotUpdate.UI
         /// <summary>模态弹窗，点确认后返回。title 可空。</summary>
         UniTask ShowDialogAsync(string message, string title = null, string okText = "确定", CancellationToken ct = default);
 
+        /// <summary>是/否确认框。返回 true = 点「是」。</summary>
+        UniTask<bool> ShowConfirmAsync(string message, string title = null, string yesText = "是", string noText = "否", CancellationToken ct = default);
+
         void SetLoginHandler(Func<string, string, UniTask> handler);
         void SetOfflineEnterHandler(Func<UniTask> handler);
         void SetStartGameHandler(Func<UniTask> handler);
