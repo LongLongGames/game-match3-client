@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
@@ -38,6 +39,10 @@ namespace HotUpdate.UI
         LevelProgressItem[] _homeLevels;
         int _nextLevelId = 1;
         int _focusLevelId; // 回主页时高亮并弹确认的关卡
+
+        // 邮件（mock，暂无 API）
+        List<MailEntry> _mailList;
+        ListView _mailListView;
 
         // 非破坏性 tip（不整页清空）
         VisualElement _tipRoot;
@@ -680,6 +685,401 @@ namespace HotUpdate.UI
             btn.style.marginLeft = 8;
         }
 
+
+        // ==================== 邮件系统（mock + ListView 虚拟滚动） ====================
+
+        class MailReward
+        {
+            public int ItemId;
+            public int Count;
+            public string Icon; // item_ 系列 sprite 名
+            public string Name;
+        }
+
+        class MailEntry
+        {
+            public long Id;
+            public string Title;
+            public string Body;
+            public long SendTimeUnix;
+            public long ExpireTimeUnix;
+            public bool Claimed;
+            public List<MailReward> Rewards; // null/empty = 纯文本邮件
+        }
+
+        void EnsureMailMocks()
+        {
+            if (_mailList != null) return;
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            _mailList = new List<MailEntry>
+            {
+                new MailEntry
+                {
+                    Id = 1001,
+                    Title = "系统维护通知",
+                    Body = "亲爱的玩家，服务器将于本周六 02:00–04:00 进行例行维护，期间无法登录。维护结束后将发放补偿邮件，敬请留意。感谢您的理解与支持！",
+                    SendTimeUnix = now - 3600 * 5,
+                    ExpireTimeUnix = now + 3600 * 24 * 7,
+                    Claimed = false,
+                    Rewards = null
+                },
+                new MailEntry
+                {
+                    Id = 1002,
+                    Title = "登录奖励 · 道具礼包",
+                    Body = "欢迎回来！这是您的登录补给，内含体力与道具，请尽快领取。过期后将无法再领取。",
+                    SendTimeUnix = now - 1800,
+                    ExpireTimeUnix = now + 3600 * 48,
+                    Claimed = false,
+                    Rewards = new List<MailReward>
+                    {
+                        new MailReward { ItemId = 8, Count = 1, Icon = "item_energy_10", Name = "体力+10" },
+                        new MailReward { ItemId = 1, Count = 2, Icon = "item_hammer", Name = "锤子" },
+                        new MailReward { ItemId = 7, Count = 100, Icon = "item_gold", Name = "金币" },
+                    }
+                },
+            };
+        }
+
+        static string FormatMailTime(long unix)
+        {
+            if (unix <= 0) return "—";
+            try
+            {
+                return DateTimeOffset.FromUnixTimeSeconds(unix).ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+            }
+            catch { return unix.ToString(); }
+        }
+
+        bool IsMailExpired(MailEntry m)
+        {
+            if (m.ExpireTimeUnix <= 0) return false;
+            return DateTimeOffset.UtcNow.ToUnixTimeSeconds() > m.ExpireTimeUnix;
+        }
+
+        void ShowMailPopup()
+        {
+            EnsureDoc();
+            EnsureMailMocks();
+            _root.Q("UI_Mail")?.RemoveFromHierarchy();
+
+            var mask = new VisualElement { name = "UI_Mail" };
+            mask.style.position = Position.Absolute;
+            mask.style.left = 0;
+            mask.style.right = 0;
+            mask.style.top = 0;
+            mask.style.bottom = 0;
+            mask.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
+            mask.style.justifyContent = Justify.Center;
+            mask.style.alignItems = Align.Center;
+            mask.pickingMode = PickingMode.Position;
+
+            var card = new VisualElement { name = "UI_Mail_Card" };
+            card.style.width = 400;
+            card.style.maxWidth = Length.Percent(94);
+            card.style.height = 520;
+            card.style.maxHeight = Length.Percent(88);
+            card.style.paddingTop = 16;
+            card.style.paddingBottom = 14;
+            card.style.paddingLeft = 14;
+            card.style.paddingRight = 14;
+            card.style.backgroundColor = new Color(0.14f, 0.16f, 0.22f, 1f);
+            card.style.borderTopLeftRadius = 12;
+            card.style.borderTopRightRadius = 12;
+            card.style.borderBottomLeftRadius = 12;
+            card.style.borderBottomRightRadius = 12;
+            card.style.flexDirection = FlexDirection.Column;
+
+            var titleRow = new VisualElement();
+            titleRow.style.flexDirection = FlexDirection.Row;
+            titleRow.style.justifyContent = Justify.SpaceBetween;
+            titleRow.style.alignItems = Align.Center;
+            titleRow.style.marginBottom = 10;
+
+            var titleLabel = new Label("邮件") { name = "UI_Mail_Title" };
+            titleLabel.style.fontSize = 20;
+            titleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            titleLabel.style.color = Color.white;
+            titleRow.Add(titleLabel);
+
+            var btnClose = new Button { text = "×", name = "UI_Mail_BtnClose" };
+            btnClose.style.width = 36;
+            btnClose.style.height = 36;
+            btnClose.style.fontSize = 22;
+            btnClose.style.backgroundColor = new Color(0.35f, 0.38f, 0.45f, 1f);
+            btnClose.style.color = Color.white;
+            btnClose.style.borderTopLeftRadius = 8;
+            btnClose.style.borderTopRightRadius = 8;
+            btnClose.style.borderBottomLeftRadius = 8;
+            btnClose.style.borderBottomRightRadius = 8;
+            WireClickSfx(btnClose);
+            btnClose.clicked += () => mask.RemoveFromHierarchy();
+            titleRow.Add(btnClose);
+            card.Add(titleRow);
+
+            var emptyHint = new Label("暂无邮件") { name = "UI_Mail_Empty" };
+            emptyHint.style.fontSize = 15;
+            emptyHint.style.color = new Color(0.65f, 0.68f, 0.74f, 1f);
+            emptyHint.style.unityTextAlign = TextAnchor.MiddleCenter;
+            emptyHint.style.flexGrow = 1;
+            emptyHint.style.display = _mailList.Count == 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            card.Add(emptyHint);
+
+            // ListView 虚拟化 = infiniteScroll 风格
+            var listView = new ListView
+            {
+                name = "UI_Mail_List",
+                itemsSource = _mailList,
+                selectionType = SelectionType.None,
+                virtualizationMethod = CollectionVirtualizationMethod.DynamicHeight,
+                showAlternatingRowBackgrounds = AlternatingRowBackground.None,
+                showBorder = false,
+            };
+            listView.style.flexGrow = 1;
+            listView.style.display = _mailList.Count == 0 ? DisplayStyle.None : DisplayStyle.Flex;
+            listView.makeItem = MakeMailRow;
+            listView.bindItem = BindMailRow;
+            _mailListView = listView;
+            card.Add(listView);
+
+            mask.RegisterCallback<ClickEvent>(evt =>
+            {
+                if (evt.target == mask)
+                    mask.RemoveFromHierarchy();
+            });
+
+            mask.Add(card);
+            _root.Add(mask);
+            mask.BringToFront();
+        }
+
+        VisualElement MakeMailRow()
+        {
+            var row = new VisualElement { name = "MailRow" };
+            row.style.flexDirection = FlexDirection.Column;
+            row.style.paddingTop = 10;
+            row.style.paddingBottom = 10;
+            row.style.paddingLeft = 10;
+            row.style.paddingRight = 10;
+            row.style.marginBottom = 8;
+            row.style.backgroundColor = new Color(0.20f, 0.22f, 0.28f, 1f);
+            row.style.borderTopLeftRadius = 8;
+            row.style.borderTopRightRadius = 8;
+            row.style.borderBottomLeftRadius = 8;
+            row.style.borderBottomRightRadius = 8;
+
+            var title = new Label { name = "Mail_Title" };
+            title.style.fontSize = 16;
+            title.style.unityFontStyleAndWeight = FontStyle.Bold;
+            title.style.color = Color.white;
+            title.style.marginBottom = 4;
+            row.Add(title);
+
+            var meta = new Label { name = "Mail_Meta" };
+            meta.style.fontSize = 11;
+            meta.style.color = new Color(0.6f, 0.65f, 0.72f, 1f);
+            meta.style.marginBottom = 6;
+            row.Add(meta);
+
+            var body = new Label { name = "Mail_Body" };
+            body.style.fontSize = 13;
+            body.style.color = new Color(0.82f, 0.85f, 0.90f, 1f);
+            body.style.whiteSpace = WhiteSpace.Normal;
+            body.style.marginBottom = 8;
+            row.Add(body);
+
+            var rewardRow = new VisualElement { name = "Mail_Rewards" };
+            rewardRow.style.flexDirection = FlexDirection.Row;
+            rewardRow.style.flexWrap = Wrap.Wrap;
+            rewardRow.style.marginBottom = 8;
+            row.Add(rewardRow);
+
+            var actionRow = new VisualElement { name = "Mail_Actions" };
+            actionRow.style.flexDirection = FlexDirection.Row;
+            actionRow.style.justifyContent = Justify.FlexEnd;
+            row.Add(actionRow);
+
+            return row;
+        }
+
+        void BindMailRow(VisualElement row, int index)
+        {
+            if (index < 0 || index >= _mailList.Count) return;
+            var mail = _mailList[index];
+
+            var title = row.Q<Label>("Mail_Title");
+            if (title != null)
+            {
+                var tag = (mail.Rewards != null && mail.Rewards.Count > 0) ? "【奖励】" : "【通知】";
+                title.text = tag + mail.Title;
+            }
+
+            var meta = row.Q<Label>("Mail_Meta");
+            if (meta != null)
+            {
+                var expired = IsMailExpired(mail);
+                meta.text = $"发送：{FormatMailTime(mail.SendTimeUnix)}    过期：{FormatMailTime(mail.ExpireTimeUnix)}"
+                    + (expired ? "  (已过期)" : "")
+                    + (mail.Claimed ? "  (已领取)" : "");
+                meta.style.color = expired
+                    ? new Color(0.85f, 0.45f, 0.4f, 1f)
+                    : new Color(0.6f, 0.65f, 0.72f, 1f);
+            }
+
+            var body = row.Q<Label>("Mail_Body");
+            if (body != null) body.text = mail.Body ?? "";
+
+            var rewardRow = row.Q("Mail_Rewards");
+            if (rewardRow != null)
+            {
+                rewardRow.Clear();
+                if (mail.Rewards != null && mail.Rewards.Count > 0)
+                {
+                    rewardRow.style.display = DisplayStyle.Flex;
+                    foreach (var r in mail.Rewards)
+                    {
+                        var chip = new VisualElement();
+                        chip.style.flexDirection = FlexDirection.Row;
+                        chip.style.alignItems = Align.Center;
+                        chip.style.marginRight = 8;
+                        chip.style.marginBottom = 4;
+                        chip.style.paddingLeft = 6;
+                        chip.style.paddingRight = 8;
+                        chip.style.paddingTop = 4;
+                        chip.style.paddingBottom = 4;
+                        chip.style.backgroundColor = new Color(0.12f, 0.14f, 0.18f, 1f);
+                        chip.style.borderTopLeftRadius = 6;
+                        chip.style.borderTopRightRadius = 6;
+                        chip.style.borderBottomLeftRadius = 6;
+                        chip.style.borderBottomRightRadius = 6;
+
+                        var icon = new VisualElement { name = "Mail_RewardIcon" };
+                        icon.style.width = 28;
+                        icon.style.height = 28;
+                        icon.style.marginRight = 4;
+                        icon.style.unityBackgroundScaleMode = ScaleMode.ScaleToFit;
+                        var iconName = r.Icon;
+                        if (!string.IsNullOrEmpty(iconName))
+                        {
+                            LoadMailIconAsync(icon, iconName).Forget();
+                        }
+                        chip.Add(icon);
+
+                        var lbl = new Label($"{r.Name} x{r.Count}");
+                        lbl.style.fontSize = 12;
+                        lbl.style.color = Color.white;
+                        chip.Add(lbl);
+                        rewardRow.Add(chip);
+                    }
+                }
+                else
+                {
+                    rewardRow.style.display = DisplayStyle.None;
+                }
+            }
+
+            var actionRow = row.Q("Mail_Actions");
+            if (actionRow != null)
+            {
+                actionRow.Clear();
+                bool hasReward = mail.Rewards != null && mail.Rewards.Count > 0;
+                bool expired = IsMailExpired(mail);
+
+                if (hasReward && !mail.Claimed && !expired)
+                {
+                    var btnClaim = new Button { text = "领取" };
+                    StyleMailActionBtn(btnClaim, new Color(0.22f, 0.55f, 0.35f, 1f));
+                    WireClickSfx(btnClaim);
+                    var captured = mail;
+                    btnClaim.clicked += () => OnMailClaim(captured);
+                    actionRow.Add(btnClaim);
+                }
+                else if (hasReward && mail.Claimed)
+                {
+                    var done = new Label("已领取");
+                    done.style.fontSize = 13;
+                    done.style.color = new Color(0.55f, 0.75f, 0.6f, 1f);
+                    done.style.marginRight = 8;
+                    done.style.unityTextAlign = TextAnchor.MiddleCenter;
+                    actionRow.Add(done);
+                }
+
+                var btnDel = new Button { text = "删除" };
+                StyleMailActionBtn(btnDel, new Color(0.5f, 0.28f, 0.28f, 1f));
+                WireClickSfx(btnDel);
+                var delTarget = mail;
+                btnDel.clicked += () => OnMailDelete(delTarget);
+                actionRow.Add(btnDel);
+            }
+        }
+
+        static void StyleMailActionBtn(Button btn, Color bg)
+        {
+            btn.style.height = 32;
+            btn.style.minWidth = 72;
+            btn.style.marginLeft = 8;
+            btn.style.fontSize = 13;
+            btn.style.backgroundColor = bg;
+            btn.style.color = Color.white;
+            btn.style.borderTopLeftRadius = 6;
+            btn.style.borderTopRightRadius = 6;
+            btn.style.borderBottomLeftRadius = 6;
+            btn.style.borderBottomRightRadius = 6;
+        }
+
+        async UniTaskVoid LoadMailIconAsync(VisualElement iconVe, string iconName)
+        {
+            try
+            {
+                var sp = await ResManager.LoadSpriteAsync(iconName);
+                if (sp != null && iconVe != null && iconVe.panel != null)
+                    iconVe.style.backgroundImage = new StyleBackground(sp);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Mail] load icon {iconName} failed: {e.Message}");
+            }
+        }
+
+        void OnMailClaim(MailEntry mail)
+        {
+            if (mail == null) return;
+            if (mail.Claimed)
+            {
+                ShowTip("已经领取过了");
+                return;
+            }
+            if (IsMailExpired(mail))
+            {
+                ShowTip("邮件已过期，无法领取");
+                return;
+            }
+            mail.Claimed = true;
+            var names = mail.Rewards != null
+                ? string.Join("、", mail.Rewards.ConvertAll(r => $"{r.Name}x{r.Count}"))
+                : "";
+            ShowTip(string.IsNullOrEmpty(names) ? "领取成功" : $"已领取：{names}");
+            _mailListView?.RefreshItems();
+        }
+
+        void OnMailDelete(MailEntry mail)
+        {
+            if (mail == null || _mailList == null) return;
+            _mailList.RemoveAll(m => m.Id == mail.Id);
+            if (_mailListView != null)
+            {
+                _mailListView.itemsSource = _mailList;
+                _mailListView.Rebuild();
+            }
+            var popup = _root?.Q("UI_Mail");
+            var empty = popup?.Q("UI_Mail_Empty");
+            var list = popup?.Q("UI_Mail_List");
+            if (empty != null) empty.style.display = _mailList.Count == 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            if (list != null) list.style.display = _mailList.Count == 0 ? DisplayStyle.None : DisplayStyle.Flex;
+            ShowTip("已删除");
+        }
+
+
         static void StyleFullWidthButton(Button btn, Color bg)
         {
             btn.style.height = 40;
@@ -1128,7 +1528,7 @@ namespace HotUpdate.UI
             if (btnMail != null)
             {
                 WireClickSfx(btnMail);
-                btnMail.clicked += () => { /* TODO: 打开邮件 */ };
+                btnMail.clicked += () => ShowMailPopup();
             }
             var btnSettings = page.Q<Button>("Home_BtnSettings");
             if (btnSettings != null)

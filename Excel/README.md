@@ -25,14 +25,22 @@
 
 ### Item.xlsx（道具）
 
-| Id | Name | Effect | 说明 |
-|----|------|--------|------|
-| 1 | 锤子 | ClearOne | 消一格 |
-| 2 | 横消 | ClearRow | 消一行 |
-| 3 | 竖消 | ClearCol | 消一列 |
-| 4 | 九宫格炸弹 | Bomb3x3 | 3×3 |
-| 5 | 洗牌 | Shuffle | 重排 |
-| 6 | 加五步 | ExtraSteps | Param=步数 |
+Icon 字段使用 `Assets/Art/Sprites`（及 Bundles/Sprites）中的 `item_` 系列资源名。
+
+| Id | Name | Effect | Icon | 说明 |
+|----|------|--------|------|------|
+| 1 | 锤子 | ClearOne | item_hammer | 消一格 |
+| 2 | 横消 | ClearRow | item_rocket_h | 消一行 |
+| 3 | 竖消 | ClearCol | item_rocket_v | 消一列 |
+| 4 | 九宫格炸弹 | Bomb3x3 | item_flower_5col | 3×3 |
+| 5 | 洗牌 | Shuffle | item_score_20 | 重排 |
+| 6 | 加五步 | ExtraSteps | item_steps_3 | Param=步数 |
+| 7 | 金币 | Currency | item_gold | 货币 |
+| 8 | 体力 | Energy | item_energy_10 | 恢复体力 Param=10 |
+| 9 | 钻石 | Currency | item_diamond | 货币 |
+| 10 | 加分 | Score | item_score_20 | 额外分数 |
+
+> 修改后请在 Unity 执行 **Tools → Excel Config Compiler** 重新导出 `Item.bytes`。
 
 ### CheckInReward.xlsx（签到）
 

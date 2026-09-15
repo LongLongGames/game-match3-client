@@ -269,6 +269,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1030421516}
   - component: {fileID: 1030421517}
+  - component: {fileID: 1030421518}
   m_Layer: 0
   m_Name: ABManager
   m_TagString: Untagged
@@ -303,6 +304,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c172b43578a34f44b81f78fbce933e44, type: 3}
   m_Name: 
   m_EditorClassIdentifier: com.setsuodu.AssetBundleFramework::ABManager
+--- !u!114 &1030421518
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1030421515}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9680905b9187d645a123383fb7f504c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: com.setsuodu.AssetBundleFramework::ABUpdater
+  useInspectorOverride: 0
+  inspectorRemoteRoot: http://127.0.0.1/AssetBundles
 --- !u!1 &1452532982
 GameObject:
   m_ObjectHideFlags: 0
