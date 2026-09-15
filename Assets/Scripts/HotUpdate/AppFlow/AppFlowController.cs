@@ -26,6 +26,7 @@ namespace HotUpdate.AppFlow
         readonly ILeaderboardService _leaderboard;
         readonly IPlayerService _player;
         readonly IHttpClient _http;
+        readonly IAudioManager _audio;
 
         bool _handlersBound;
         bool _unauthorizedHandling;
@@ -39,7 +40,8 @@ namespace HotUpdate.AppFlow
             IMatch3Service match3,
             ILeaderboardService leaderboard,
             IPlayerService player,
-            IHttpClient http)
+            IHttpClient http,
+            IAudioManager audio)
         {
             _version = version;
             _auth = auth;
@@ -48,6 +50,7 @@ namespace HotUpdate.AppFlow
             _leaderboard = leaderboard;
             _player = player;
             _http = http;
+            _audio = audio;
         }
 
         public async UniTask StartAsync(CancellationToken ct)
@@ -56,6 +59,8 @@ namespace HotUpdate.AppFlow
             _http.Unauthorized += OnUnauthorized;
 
             BindUiHandlers();
+            // 启动默认播放 BGM（受设置开关控制）
+            _audio?.PlayBgm(null, loop: true);
             Debug.Log("[AppFlow] Start");
             await GotoAsync(AppState.CheckUpdate, ct);
         }

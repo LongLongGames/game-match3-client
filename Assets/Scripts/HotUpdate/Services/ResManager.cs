@@ -111,18 +111,18 @@ namespace HotUpdate.Services
             => LoadAsync<AudioClip>(bundle, asset, ct);
 
         /// <summary>
-        /// 便捷：audio/sfx/{name}
-        /// 例：LoadSfxAsync("click") → audio/sfx + click
+        /// 便捷：Assets/Bundles/SFX/{name}
+        /// 例：LoadSfxAsync("GetHeart") → bundle=sfx + asset=GetHeart
         /// </summary>
         public static UniTask<AudioClip> LoadSfxAsync(string name, CancellationToken ct = default)
-            => LoadAsync<AudioClip>("audio/sfx", name, ct);
+            => LoadAsync<AudioClip>("sfx", name, ct);
 
         /// <summary>
-        /// 便捷：audio/bgm/{name}
-        /// 例：LoadBgmAsync("home") → audio/bgm + home
+        /// 便捷：Assets/Bundles/BGM/{name}
+        /// 例：LoadBgmAsync("Dewfall_at_Daybreak") → bundle=bgm + asset=Dewfall_at_Daybreak
         /// </summary>
         public static UniTask<AudioClip> LoadBgmAsync(string name, CancellationToken ct = default)
-            => LoadAsync<AudioClip>("audio/bgm", name, ct);
+            => LoadAsync<AudioClip>("bgm", name, ct);
 
         // ---------- 配置 / 其它 ----------
 

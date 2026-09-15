@@ -36,6 +36,7 @@ namespace HotUpdate
             builder.Register<ILeaderboardService, LeaderboardService>(Lifetime.Singleton);
             builder.Register<IVersionService, VersionService>(Lifetime.Singleton);
             builder.Register<IResService, ResService>(Lifetime.Singleton);
+            builder.Register<IAudioManager, AudioManager>(Lifetime.Singleton);
 
             // UI：UIToolkit 壳 + Match3 HUD
             builder.Register<UIService>(Lifetime.Singleton);

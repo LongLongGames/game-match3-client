@@ -18,6 +18,8 @@ namespace HotUpdate.UI
     public class UIService : IUIService, IMatch3Hud
     {
         readonly IAuthService _auth;
+        readonly IPlayerService _player;
+        readonly IAudioManager _audio;
 
         UIDocument _doc;
         VisualElement _root;
@@ -47,9 +49,18 @@ namespace HotUpdate.UI
         public UIPanel CurrentPanel { get; private set; } = UIPanel.None;
         public string CurrentUIAsset => _currentUIAsset;
 
-        public UIService(IAuthService auth)
+        public UIService(IAuthService auth, IPlayerService player, IAudioManager audio)
         {
             _auth = auth;
+            _player = player;
+            _audio = audio;
+        }
+
+        /// <summary>非 Game 局内按钮统一挂 UI 点击音效。</summary>
+        void WireClickSfx(Button btn)
+        {
+            if (btn == null) return;
+            btn.clicked += () => _audio?.PlayUiClick();
         }
 
         public void SetLoginHandler(Func<string, string, UniTask> handler) => _onLogin = handler;
@@ -223,6 +234,7 @@ namespace HotUpdate.UI
             ok.style.borderTopRightRadius = 8;
             ok.style.borderBottomLeftRadius = 8;
             ok.style.borderBottomRightRadius = 8;
+            WireClickSfx(ok);
             ok.clicked += () =>
             {
                 mask.RemoveFromHierarchy();
@@ -319,6 +331,7 @@ namespace HotUpdate.UI
             noBtn.style.borderTopRightRadius = 8;
             noBtn.style.borderBottomLeftRadius = 8;
             noBtn.style.borderBottomRightRadius = 8;
+            WireClickSfx(noBtn);
             noBtn.clicked += () =>
             {
                 mask.RemoveFromHierarchy();
@@ -336,6 +349,7 @@ namespace HotUpdate.UI
             yesBtn.style.borderTopRightRadius = 8;
             yesBtn.style.borderBottomLeftRadius = 8;
             yesBtn.style.borderBottomRightRadius = 8;
+            WireClickSfx(yesBtn);
             yesBtn.clicked += () =>
             {
                 mask.RemoveFromHierarchy();
@@ -356,6 +370,199 @@ namespace HotUpdate.UI
                 mask.RemoveFromHierarchy();
                 throw;
             }
+        }
+
+        /// <summary>
+        /// 主页设置弹窗：昵称 / 玩家ID / BGM·音效开关 / 联系客服 / 隐私协议 / 客户端版本。
+        /// </summary>
+        void ShowSettingsPopup()
+        {
+            EnsureDoc();
+            _root.Q("UI_Settings")?.RemoveFromHierarchy();
+
+            var mask = new VisualElement { name = "UI_Settings" };
+            mask.style.position = Position.Absolute;
+            mask.style.left = 0;
+            mask.style.right = 0;
+            mask.style.top = 0;
+            mask.style.bottom = 0;
+            mask.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
+            mask.style.justifyContent = Justify.Center;
+            mask.style.alignItems = Align.Center;
+            mask.pickingMode = PickingMode.Position;
+
+            var card = new VisualElement { name = "UI_Settings_Card" };
+            card.style.width = 360;
+            card.style.maxWidth = Length.Percent(92);
+            card.style.paddingTop = 20;
+            card.style.paddingBottom = 18;
+            card.style.paddingLeft = 20;
+            card.style.paddingRight = 20;
+            card.style.backgroundColor = new Color(0.16f, 0.18f, 0.24f, 1f);
+            card.style.borderTopLeftRadius = 12;
+            card.style.borderTopRightRadius = 12;
+            card.style.borderBottomLeftRadius = 12;
+            card.style.borderBottomRightRadius = 12;
+            card.style.alignItems = Align.Stretch;
+
+            // 标题
+            var titleLabel = new Label("设置") { name = "UI_Settings_Title" };
+            titleLabel.style.fontSize = 20;
+            titleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            titleLabel.style.color = Color.white;
+            titleLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            titleLabel.style.marginBottom = 16;
+            card.Add(titleLabel);
+
+            var profile = _player?.Profile;
+            string nick = string.IsNullOrEmpty(profile?.nickname) ? "Player" : profile.nickname;
+            string playerId = string.IsNullOrEmpty(profile?.id)
+                ? (string.IsNullOrEmpty(profile?.mp_account_id) ? "—" : profile.mp_account_id)
+                : profile.id;
+
+            // 昵称行：昵称 + 修改按钮
+            var nickRow = MakeSettingsRow();
+            var nickLabel = new Label($"昵称：{nick}");
+            StyleSettingsLabel(nickLabel);
+            nickLabel.style.flexGrow = 1;
+            nickRow.Add(nickLabel);
+            var btnRename = new Button { text = "修改", name = "UI_Settings_BtnRename" };
+            StyleSmallButton(btnRename, new Color(0.25f, 0.55f, 0.95f, 1f));
+            WireClickSfx(btnRename);
+            btnRename.clicked += () =>
+            {
+                ShowToast("修改昵称功能即将开放");
+            };
+            nickRow.Add(btnRename);
+            card.Add(nickRow);
+
+            // 玩家ID
+            var idRow = MakeSettingsRow();
+            var idLabel = new Label($"玩家ID：{playerId}");
+            StyleSettingsLabel(idLabel);
+            idRow.Add(idLabel);
+            card.Add(idRow);
+
+            // 背景音乐 Toggle → AudioManager
+            var bgmToggle = new Toggle("背景音乐") { name = "UI_Settings_Bgm", value = _audio == null || _audio.BgmEnabled };
+            StyleSettingsToggle(bgmToggle);
+            bgmToggle.RegisterValueChangedCallback(evt =>
+            {
+                _audio?.SetBgmEnabled(evt.newValue);
+            });
+            card.Add(bgmToggle);
+
+            // 音效 Toggle → AudioManager
+            var sfxToggle = new Toggle("音效") { name = "UI_Settings_Sfx", value = _audio == null || _audio.SfxEnabled };
+            StyleSettingsToggle(sfxToggle);
+            sfxToggle.RegisterValueChangedCallback(evt =>
+            {
+                _audio?.SetSfxEnabled(evt.newValue);
+            });
+            card.Add(sfxToggle);
+
+            // 联系客服
+            var btnCs = new Button { text = "联系客服", name = "UI_Settings_BtnCs" };
+            StyleFullWidthButton(btnCs, new Color(0.22f, 0.48f, 0.72f, 1f));
+            WireClickSfx(btnCs);
+            btnCs.clicked += () =>
+            {
+                _ = ShowDialogAsync("如有问题请联系客服邮箱：support@example.com\n或通过游戏内反馈渠道提交。", title: "联系客服");
+            };
+            card.Add(btnCs);
+
+            // 隐私协议
+            var btnPrivacy = new Button { text = "隐私协议", name = "UI_Settings_BtnPrivacy" };
+            StyleFullWidthButton(btnPrivacy, new Color(0.22f, 0.48f, 0.72f, 1f));
+            WireClickSfx(btnPrivacy);
+            btnPrivacy.clicked += () =>
+            {
+                _ = ShowDialogAsync(
+                    "我们重视您的隐私。本游戏会收集必要的账号与设备信息用于登录、存档与反作弊，不会向第三方出售个人数据。详细条款请以正式发布版本为准。",
+                    title: "隐私协议");
+            };
+            card.Add(btnPrivacy);
+
+            // 客户端版本
+            var ver = Application.version;
+            if (string.IsNullOrEmpty(ver)) ver = "0.0.0";
+            var verLabel = new Label($"客户端版本：{ver}") { name = "UI_Settings_Version" };
+            verLabel.style.fontSize = 13;
+            verLabel.style.color = new Color(0.7f, 0.72f, 0.78f, 1f);
+            verLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            verLabel.style.marginTop = 10;
+            verLabel.style.marginBottom = 12;
+            card.Add(verLabel);
+
+            // 关闭
+            var btnClose = new Button { text = "关闭", name = "UI_Settings_BtnClose" };
+            StyleFullWidthButton(btnClose, new Color(0.35f, 0.38f, 0.45f, 1f));
+            WireClickSfx(btnClose);
+            btnClose.clicked += () => mask.RemoveFromHierarchy();
+            card.Add(btnClose);
+
+            // 点击遮罩关闭
+            mask.RegisterCallback<ClickEvent>(evt =>
+            {
+                if (evt.target == mask)
+                    mask.RemoveFromHierarchy();
+            });
+
+            mask.Add(card);
+            _root.Add(mask);
+            mask.BringToFront();
+        }
+
+        static VisualElement MakeSettingsRow()
+        {
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.Center;
+            row.style.marginBottom = 10;
+            row.style.minHeight = 36;
+            return row;
+        }
+
+        static void StyleSettingsLabel(Label label)
+        {
+            label.style.fontSize = 15;
+            label.style.color = new Color(0.92f, 0.93f, 0.96f, 1f);
+            label.style.unityTextAlign = TextAnchor.MiddleLeft;
+        }
+
+        static void StyleSettingsToggle(Toggle toggle)
+        {
+            toggle.style.marginBottom = 10;
+            toggle.style.fontSize = 15;
+            toggle.style.color = new Color(0.92f, 0.93f, 0.96f, 1f);
+            toggle.style.height = 36;
+        }
+
+        static void StyleSmallButton(Button btn, Color bg)
+        {
+            btn.style.width = 72;
+            btn.style.height = 32;
+            btn.style.fontSize = 14;
+            btn.style.backgroundColor = bg;
+            btn.style.color = Color.white;
+            btn.style.borderTopLeftRadius = 6;
+            btn.style.borderTopRightRadius = 6;
+            btn.style.borderBottomLeftRadius = 6;
+            btn.style.borderBottomRightRadius = 6;
+            btn.style.marginLeft = 8;
+        }
+
+        static void StyleFullWidthButton(Button btn, Color bg)
+        {
+            btn.style.height = 40;
+            btn.style.fontSize = 15;
+            btn.style.backgroundColor = bg;
+            btn.style.color = Color.white;
+            btn.style.borderTopLeftRadius = 8;
+            btn.style.borderTopRightRadius = 8;
+            btn.style.borderBottomLeftRadius = 8;
+            btn.style.borderBottomRightRadius = 8;
+            btn.style.marginBottom = 8;
         }
 
         public async UniTask ShowLevelResultAsync(bool success, int stars, int score, int steps, CancellationToken ct = default)
@@ -435,6 +642,7 @@ namespace HotUpdate.UI
                 next.style.borderTopRightRadius = 10;
                 next.style.borderBottomLeftRadius = 10;
                 next.style.borderBottomRightRadius = 10;
+                WireClickSfx(next);
                 next.clicked += () =>
                 {
                     mask.RemoveFromHierarchy();
@@ -460,6 +668,7 @@ namespace HotUpdate.UI
                 closeX.style.borderTopRightRadius = 8;
                 closeX.style.borderBottomLeftRadius = 8;
                 closeX.style.borderBottomRightRadius = 8;
+                WireClickSfx(closeX);
                 closeX.clicked += () =>
                 {
                     mask.RemoveFromHierarchy();
@@ -587,6 +796,7 @@ namespace HotUpdate.UI
             cancel.style.marginRight = 12;
             cancel.style.backgroundColor = new Color(0.35f, 0.35f, 0.4f, 1f);
             cancel.style.color = Color.white;
+            WireClickSfx(cancel);
             cancel.clicked += () => mask.RemoveFromHierarchy();
             row.Add(cancel);
 
@@ -596,6 +806,7 @@ namespace HotUpdate.UI
             ok.style.backgroundColor = new Color(0.2f, 0.65f, 0.35f, 1f);
             ok.style.color = Color.white;
             int m = mapId, lv = levelId;
+            WireClickSfx(ok);
             ok.clicked += () =>
             {
                 mask.RemoveFromHierarchy();
@@ -740,6 +951,7 @@ namespace HotUpdate.UI
 
             if (btn != null)
             {
+                WireClickSfx(btn);
                 btn.clicked += async () =>
                 {
                     if (_onLogin == null) return;
@@ -751,6 +963,7 @@ namespace HotUpdate.UI
 
             if (offline != null)
             {
+                WireClickSfx(offline);
                 offline.clicked += async () =>
                 {
                     if (_onOfflineEnter != null)
@@ -782,16 +995,18 @@ namespace HotUpdate.UI
                     $"已解锁地图 {_unlockedMap}    本图进度 {_clearedOnMap}/{_levelsPerMap}";
             }
 
-            // 邮件 / 设置 按钮（占位，后续可接功能）
+            // 邮件 / 设置 按钮
             var btnMail = page.Q<Button>("Home_BtnMail");
             if (btnMail != null)
             {
+                WireClickSfx(btnMail);
                 btnMail.clicked += () => { /* TODO: 打开邮件 */ };
             }
             var btnSettings = page.Q<Button>("Home_BtnSettings");
             if (btnSettings != null)
             {
-                btnSettings.clicked += () => { /* TODO: 打开设置 */ };
+                WireClickSfx(btnSettings);
+                btnSettings.clicked += () => ShowSettingsPopup();
             }
 
             var pathArea = page.Q("Home_PathArea");
@@ -802,12 +1017,14 @@ namespace HotUpdate.UI
             if (nextBtn != null)
             {
                 nextBtn.text = $"第{_nextLevelId}关";
+                WireClickSfx(nextBtn);
                 nextBtn.clicked += () => ShowEnterConfirm(_homeMapId, _nextLevelId);
             }
 
             var logout = page.Q<Button>("Home_BtnLogout");
             if (logout != null)
             {
+                WireClickSfx(logout);
                 logout.clicked += async () =>
                 {
                     var ok = await ShowConfirmAsync("确定要退出登录吗？", title: "退出登录", yesText: "是", noText: "否");
@@ -898,6 +1115,7 @@ namespace HotUpdate.UI
                 int capturedMap = _homeMapId;
                 bool capturedUnlocked = unlocked;
 
+                WireClickSfx(btn);
                 btn.clicked += () =>
                 {
                     if (!capturedUnlocked)
