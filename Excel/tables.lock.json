@@ -1,10 +1,10 @@
 ﻿{
   "version": 1,
-  "generatedAt": "2026-09-14T22:56:42Z",
+  "generatedAt": "2026-09-15T10:18:05Z",
   "tables": [
     {"table": "CheckInReward", "target": "Shared", "path": "Shared/CheckInReward.xlsx", "sha256": "594f675c2137bc4d6d65c2219d1b57de07d721a0568dfb74af39d887a35e7402", "rows": 7, "fields": 10},
     {"table": "GameRules", "target": "Shared", "path": "Shared/GameRules.xlsx", "sha256": "c2c88c680f9b30c956b04c9f1df50586e980211cfb28774cd8fe9014af3118f0", "rows": 1, "fields": 11},
-    {"table": "Item", "target": "Shared", "path": "Shared/Item.xlsx", "sha256": "17120bc392c6dcffbdbc03c4db293719405608369a0cc5b7e35fc228f6223ccd", "rows": 6, "fields": 6},
+    {"table": "Item", "target": "Shared", "path": "Shared/Item.xlsx", "sha256": "623c1b7ca0927bd7d63022bb1b7edb7ffdd67b89e54d769d67f4f8fbc674d49a", "rows": 10, "fields": 6},
     {"table": "Level", "target": "Shared", "path": "Shared/Level.xlsx", "sha256": "99bdcc8838917cee7b78eb21c53a9ae00d8e0558b93e7022c3acf8175c33f252", "rows": 20, "fields": 10}
   ]
 }

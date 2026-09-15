@@ -1,0 +1,17 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="UI_Mail.uss" />
+    <!-- 邮件弹窗：实心遮罩 + 实心卡片 -->
+    <ui:VisualElement name="UI_Mail" picking-mode="Position" style="position: absolute; left: 0; right: 0; top: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.72); justify-content: center; align-items: center;">
+        <ui:VisualElement name="UI_Mail_Card" picking-mode="Position" style="width: 400px; max-width: 94%; height: 520px; max-height: 88%; padding-top: 16px; padding-bottom: 14px; padding-left: 14px; padding-right: 14px; background-color: rgb(28, 32, 44); border-top-left-radius: 12px; border-top-right-radius: 12px; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; flex-direction: column;">
+            <ui:VisualElement name="UI_Mail_TitleRow" style="flex-direction: row; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-shrink: 0; height: 36px;">
+                <ui:Label name="UI_Mail_Title" text="邮件" style="font-size: 20px; color: rgb(255, 255, 255); -unity-font-style: bold; -unity-text-align: middle-left;" />
+                <ui:Button name="UI_Mail_BtnClose" text="×" style="width: 36px; height: 36px; font-size: 22px; background-color: rgb(70, 78, 96); color: rgb(255, 255, 255); border-top-left-radius: 8px; border-top-right-radius: 8px; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;" />
+            </ui:VisualElement>
+            <ui:Label name="UI_Mail_Empty" text="暂无邮件" style="font-size: 15px; color: rgb(166, 173, 189); -unity-text-align: middle-center; flex-grow: 1; display: none;" />
+            <!-- 用 ScrollView：触屏/鼠标拖拽更稳；条数多时再换 ListView 虚拟化 -->
+            <ui:ScrollView name="UI_Mail_Scroll" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden" style="flex-grow: 1;">
+                <ui:VisualElement name="UI_Mail_ListContent" style="flex-direction: column; padding-bottom: 8px;" />
+            </ui:ScrollView>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -1,0 +1,8 @@
+#UI_Mail_Scroll .unity-scroll-view__vertical-scroller,
+#UI_Mail_Scroll .unity-scroll-view__horizontal-scroller,
+#UI_MailDetail_Scroll .unity-scroll-view__vertical-scroller,
+#UI_MailDetail_Scroll .unity-scroll-view__horizontal-scroller {
+    display: none;
+    width: 0;
+    opacity: 0;
+}

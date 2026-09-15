@@ -42,7 +42,9 @@ namespace HotUpdate.UI
 
         // 邮件（mock，暂无 API）
         List<MailEntry> _mailList;
-        ListView _mailListView;
+        ScrollView _mailScroll;
+        VisualElement _mailListContent;
+        VisualTreeAsset _mailItemTemplate;
 
         // 非破坏性 tip（不整页清空）
         VisualElement _tipRoot;
@@ -711,34 +713,101 @@ namespace HotUpdate.UI
         {
             if (_mailList != null) return;
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            _mailList = new List<MailEntry>
+            _mailList = new List<MailEntry>();
+
+            // 两条带奖励 + 多条纯文本，保证超过一页可滚动
+            _mailList.Add(new MailEntry
             {
-                new MailEntry
+                Id = 1001,
+                Title = "登录奖励 · 道具礼包",
+                Body = "欢迎回来！这是您的登录补给，内含体力与道具，请尽快领取。过期后将无法再领取。祝游戏愉快！",
+                SendTimeUnix = now - 1800,
+                ExpireTimeUnix = now + 3600 * 48,
+                Claimed = false,
+                Rewards = new List<MailReward>
                 {
-                    Id = 1001,
-                    Title = "系统维护通知",
-                    Body = "亲爱的玩家，服务器将于本周六 02:00–04:00 进行例行维护，期间无法登录。维护结束后将发放补偿邮件，敬请留意。感谢您的理解与支持！",
-                    SendTimeUnix = now - 3600 * 5,
-                    ExpireTimeUnix = now + 3600 * 24 * 7,
+                    new MailReward { ItemId = 8, Count = 1, Icon = "item_energy_10", Name = "体力+10" },
+                    new MailReward { ItemId = 1, Count = 2, Icon = "item_hammer", Name = "锤子" },
+                    new MailReward { ItemId = 7, Count = 100, Icon = "item_gold", Name = "金币" },
+                }
+            });
+            _mailList.Add(new MailEntry
+            {
+                Id = 1002,
+                Title = "周末补偿礼包",
+                Body = "因上周短暂波动，特此发放补偿。请在有效期内领取全部道具。再次为带来的不便致歉。",
+                SendTimeUnix = now - 3600 * 26,
+                ExpireTimeUnix = now + 3600 * 72,
+                Claimed = false,
+                Rewards = new List<MailReward>
+                {
+                    new MailReward { ItemId = 9, Count = 5, Icon = "item_diamond", Name = "钻石" },
+                    new MailReward { ItemId = 2, Count = 1, Icon = "item_rocket_h", Name = "横消" },
+                }
+            });
+
+            string[] titles =
+            {
+                "系统维护通知", "版本更新说明", "活动预告：春季盛典", "好友申请提示",
+                "排行榜结算", "签到提醒", "体力回满通知", "新关卡开放",
+                "商城限时折扣", "安全提醒", "问卷调研邀请", "社区精选分享",
+                "公会战开启", "每日任务刷新", "账号绑定奖励说明", "隐私政策更新",
+            };
+            string[] bodies =
+            {
+                "亲爱的玩家，服务器将于本周六 02:00–04:00 进行例行维护，期间无法登录。维护结束后将发放补偿邮件，敬请留意。感谢您的理解与支持！",
+                "本次更新优化了三消手感与若干 UI 细节，修复了偶现的断线重连问题。建议在 Wi‑Fi 环境下完成热更。",
+                "春季盛典即将开启：限定皮肤、双倍体力时段、排行榜专属称号等你来拿。活动时间与规则请见后续邮件。",
+                "有玩家向你发送了好友申请，可在好友页查看并处理。互相关注后可赠送每日体力。",
+                "本周排行榜已结算，你的名次与奖励已写入邮箱。奖励将在领取后自动入账。",
+                "别忘了今日签到哦，连续签到可获得额外道具。断签后进度会重置。",
+                "你的体力已恢复至上限，可以继续挑战下一关了。合理安排体力，冲刺更高星级！",
+                "新地图关卡已开放，难度曲线已调整。通关可解锁新棋盘主题与音效。",
+                "商城精选道具限时折扣中，锤子与火箭组合更划算。活动结束后恢复原价。",
+                "请勿向他人泄露账号密码。如发现异常登录，请立即修改密码并联系客服。",
+                "诚邀参与游戏体验问卷，填写可获得少量金币。你的反馈对我们很重要。",
+                "社区本周精选通关录像与搭配攻略已更新，欢迎前往查看并留言讨论。",
+                "公会战本轮已开启，报名截止前请确认公会成员在线。胜利公会将获得专属徽章。",
+                "每日任务已刷新：完成指定关卡与收集目标可领取宝箱。记得在当天 24 点前领取。",
+                "完成账号绑定（手机/邮箱）可领取一次性绑定礼包，并提升账号安全性。",
+                "我们更新了隐私政策部分条款，主要涉及数据保存周期说明。继续使用即表示知晓相关变更。",
+            };
+
+            for (int i = 0; i < titles.Length; i++)
+            {
+                // 时间分布：今天、昨天、N 天前
+                long send;
+                if (i < 3) send = now - 600 * (i + 1);           // 今天（几小时内）
+                else if (i < 6) send = now - 3600 * 24 - 3600 * i; // 昨天
+                else send = now - 3600L * 24 * (i - 3);            // 多天前
+
+                _mailList.Add(new MailEntry
+                {
+                    Id = 2000 + i,
+                    Title = titles[i],
+                    Body = bodies[i % bodies.Length],
+                    SendTimeUnix = send,
+                    ExpireTimeUnix = send + 3600L * 24 * 14,
                     Claimed = false,
                     Rewards = null
-                },
-                new MailEntry
-                {
-                    Id = 1002,
-                    Title = "登录奖励 · 道具礼包",
-                    Body = "欢迎回来！这是您的登录补给，内含体力与道具，请尽快领取。过期后将无法再领取。",
-                    SendTimeUnix = now - 1800,
-                    ExpireTimeUnix = now + 3600 * 48,
-                    Claimed = false,
-                    Rewards = new List<MailReward>
-                    {
-                        new MailReward { ItemId = 8, Count = 1, Icon = "item_energy_10", Name = "体力+10" },
-                        new MailReward { ItemId = 1, Count = 2, Icon = "item_hammer", Name = "锤子" },
-                        new MailReward { ItemId = 7, Count = 100, Icon = "item_gold", Name = "金币" },
-                    }
-                },
-            };
+                });
+            }
+        }
+
+        /// <summary>列表用相对时间：今天 / 昨天 / N天前</summary>
+        static string FormatMailRelativeTime(long unix)
+        {
+            if (unix <= 0) return "—";
+            try
+            {
+                var send = DateTimeOffset.FromUnixTimeSeconds(unix).ToLocalTime().Date;
+                var today = DateTimeOffset.Now.ToLocalTime().Date;
+                var days = (today - send).Days;
+                if (days <= 0) return "今天";
+                if (days == 1) return "昨天";
+                return $"{days}天前";
+            }
+            catch { return "—"; }
         }
 
         static string FormatMailTime(long unix)
@@ -757,90 +826,112 @@ namespace HotUpdate.UI
             return DateTimeOffset.UtcNow.ToUnixTimeSeconds() > m.ExpireTimeUnix;
         }
 
+
+        /// <summary>列表缩略：按字数截断（约合窄屏一行半）。</summary>
+        static string MakeMailPreview(string body, int maxChars = 36)
+        {
+            if (string.IsNullOrEmpty(body)) return "";
+            body = body.Replace("\r", " ").Replace("\n", " ").Trim();
+            if (body.Length <= maxChars) return body;
+            return body.Substring(0, maxChars) + "…";
+        }
+
+        async UniTask<VisualTreeAsset> LoadMailUxmlAsync(string assetName)
+        {
+            VisualTreeAsset vta = null;
+#if UNITY_EDITOR
+            vta = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+                $"Assets/Bundles/UI/{assetName}.uxml");
+#endif
+            if (vta == null)
+            {
+                if (!ResManager.IsReady)
+                    await ResManager.InitializeAsync();
+                vta = await ResManager.LoadUIAsync(assetName);
+            }
+            return vta;
+        }
+
         void ShowMailPopup()
+        {
+            ShowMailPopupAsync().Forget();
+        }
+
+        async UniTaskVoid ShowMailPopupAsync()
         {
             EnsureDoc();
             EnsureMailMocks();
             _root.Q("UI_Mail")?.RemoveFromHierarchy();
+            _root.Q("UI_MailDetail")?.RemoveFromHierarchy();
 
-            var mask = new VisualElement { name = "UI_Mail" };
+            var vta = await LoadMailUxmlAsync("UI_Mail");
+            if (vta == null)
+            {
+                Debug.LogError("[Mail] 加载 UI_Mail.uxml 失败");
+                ShowTip("邮件界面加载失败");
+                return;
+            }
+
+            if (_mailItemTemplate == null)
+                _mailItemTemplate = await LoadMailUxmlAsync("UI_MailItem");
+
+            var mask = vta.Instantiate();
+            mask.name = "UI_Mail";
+            // 强制实心底，防止样式丢失透出主页
             mask.style.position = Position.Absolute;
             mask.style.left = 0;
             mask.style.right = 0;
             mask.style.top = 0;
             mask.style.bottom = 0;
-            mask.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
+            mask.style.backgroundColor = new Color(0f, 0f, 0f, 0.72f);
             mask.style.justifyContent = Justify.Center;
             mask.style.alignItems = Align.Center;
-            mask.pickingMode = PickingMode.Position;
 
-            var card = new VisualElement { name = "UI_Mail_Card" };
-            card.style.width = 400;
-            card.style.maxWidth = Length.Percent(94);
-            card.style.height = 520;
-            card.style.maxHeight = Length.Percent(88);
-            card.style.paddingTop = 16;
-            card.style.paddingBottom = 14;
-            card.style.paddingLeft = 14;
-            card.style.paddingRight = 14;
-            card.style.backgroundColor = new Color(0.14f, 0.16f, 0.22f, 1f);
-            card.style.borderTopLeftRadius = 12;
-            card.style.borderTopRightRadius = 12;
-            card.style.borderBottomLeftRadius = 12;
-            card.style.borderBottomRightRadius = 12;
-            card.style.flexDirection = FlexDirection.Column;
-
-            var titleRow = new VisualElement();
-            titleRow.style.flexDirection = FlexDirection.Row;
-            titleRow.style.justifyContent = Justify.SpaceBetween;
-            titleRow.style.alignItems = Align.Center;
-            titleRow.style.marginBottom = 10;
-
-            var titleLabel = new Label("邮件") { name = "UI_Mail_Title" };
-            titleLabel.style.fontSize = 20;
-            titleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            titleLabel.style.color = Color.white;
-            titleRow.Add(titleLabel);
-
-            var btnClose = new Button { text = "×", name = "UI_Mail_BtnClose" };
-            btnClose.style.width = 36;
-            btnClose.style.height = 36;
-            btnClose.style.fontSize = 22;
-            btnClose.style.backgroundColor = new Color(0.35f, 0.38f, 0.45f, 1f);
-            btnClose.style.color = Color.white;
-            btnClose.style.borderTopLeftRadius = 8;
-            btnClose.style.borderTopRightRadius = 8;
-            btnClose.style.borderBottomLeftRadius = 8;
-            btnClose.style.borderBottomRightRadius = 8;
-            WireClickSfx(btnClose);
-            btnClose.clicked += () => mask.RemoveFromHierarchy();
-            titleRow.Add(btnClose);
-            card.Add(titleRow);
-
-            var emptyHint = new Label("暂无邮件") { name = "UI_Mail_Empty" };
-            emptyHint.style.fontSize = 15;
-            emptyHint.style.color = new Color(0.65f, 0.68f, 0.74f, 1f);
-            emptyHint.style.unityTextAlign = TextAnchor.MiddleCenter;
-            emptyHint.style.flexGrow = 1;
-            emptyHint.style.display = _mailList.Count == 0 ? DisplayStyle.Flex : DisplayStyle.None;
-            card.Add(emptyHint);
-
-            // ListView 虚拟化 = infiniteScroll 风格
-            var listView = new ListView
+            var card = mask.Q("UI_Mail_Card");
+            if (card != null)
             {
-                name = "UI_Mail_List",
-                itemsSource = _mailList,
-                selectionType = SelectionType.None,
-                virtualizationMethod = CollectionVirtualizationMethod.DynamicHeight,
-                showAlternatingRowBackgrounds = AlternatingRowBackground.None,
-                showBorder = false,
-            };
-            listView.style.flexGrow = 1;
-            listView.style.display = _mailList.Count == 0 ? DisplayStyle.None : DisplayStyle.Flex;
-            listView.makeItem = MakeMailRow;
-            listView.bindItem = BindMailRow;
-            _mailListView = listView;
-            card.Add(listView);
+                card.style.backgroundColor = new Color(0.11f, 0.125f, 0.17f, 1f);
+                card.pickingMode = PickingMode.Position;
+            }
+
+            var btnClose = mask.Q<Button>("UI_Mail_BtnClose");
+            if (btnClose != null)
+            {
+                WireClickSfx(btnClose);
+                btnClose.clicked += () => mask.RemoveFromHierarchy();
+            }
+
+            var emptyHint = mask.Q("UI_Mail_Empty");
+            var scroll = mask.Q<ScrollView>("UI_Mail_Scroll");
+            var content = mask.Q("UI_Mail_ListContent");
+            if (content == null && scroll != null)
+            {
+                content = new VisualElement { name = "UI_Mail_ListContent" };
+                content.style.flexDirection = FlexDirection.Column;
+                scroll.Add(content);
+            }
+
+            _mailScroll = scroll;
+            _mailListContent = content;
+
+            if (scroll != null)
+            {
+                scroll.mode = ScrollViewMode.Vertical;
+                scroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+                scroll.verticalScrollerVisibility = ScrollerVisibility.Hidden;
+                scroll.touchScrollBehavior = ScrollView.TouchScrollBehavior.Clamped;
+                scroll.elasticity = 0.1f;
+                scroll.scrollDecelerationRate = 0.135f;
+                scroll.mouseWheelScrollSize = 40f;
+                EnableMouseDragScroll(scroll);
+            }
+
+            RebuildMailListContent();
+
+            if (emptyHint != null)
+                emptyHint.style.display = _mailList.Count == 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            if (scroll != null)
+                scroll.style.display = _mailList.Count == 0 ? DisplayStyle.None : DisplayStyle.Flex;
 
             mask.RegisterCallback<ClickEvent>(evt =>
             {
@@ -848,57 +939,259 @@ namespace HotUpdate.UI
                     mask.RemoveFromHierarchy();
             });
 
-            mask.Add(card);
             _root.Add(mask);
             mask.BringToFront();
+            Debug.Log($"[Mail] popup open, items={_mailList.Count}");
+        }
+
+        void RebuildMailListContent()
+        {
+            if (_mailListContent == null) return;
+            _mailListContent.Clear();
+            if (_mailList == null) return;
+            for (int i = 0; i < _mailList.Count; i++)
+            {
+                var row = MakeMailRow();
+                BindMailRow(row, i);
+                _mailListContent.Add(row);
+            }
+        }
+
+        /// <summary>可滚范围：0 ~ contentHeight - viewportHeight。</summary>
+        static float GetMailScrollMaxY(ScrollView sv)
+        {
+            if (sv == null) return 0f;
+            var content = sv.contentContainer;
+            if (content == null) return 0f;
+            float contentH = content.layout.height;
+            float viewH = sv.layout.height;
+            if (float.IsNaN(contentH) || float.IsNaN(viewH) || contentH <= 0f || viewH <= 0f)
+                return 0f;
+            return Mathf.Max(0f, contentH - viewH);
+        }
+
+        static void SetMailScrollY(ScrollView sv, float y)
+        {
+            if (sv == null) return;
+            float max = GetMailScrollMaxY(sv);
+            y = Mathf.Clamp(y, 0f, max);
+            var off = sv.scrollOffset;
+            off.y = y;
+            sv.scrollOffset = off;
+        }
+
+        /// <summary>
+        /// 鼠标/触屏拖动滚动：头尾钳制 + 松手惯性。
+        /// 超过阈值才捕获，避免挡 item 点击。
+        /// </summary>
+        static void EnableMouseDragScroll(ScrollView sv)
+        {
+            if (sv == null) return;
+
+            bool holding = false;
+            bool dragging = false;
+            Vector2 last = default;
+            Vector2 down = default;
+            int pointerId = -1;
+            float velocityY = 0f; // px / sec，内容方向（向下拖 → 内容上移 → offset 增大 → 速度为正）
+            long lastMoveTicks = 0;
+            IVisualElementScheduledItem inertiaJob = null;
+            const float kThreshold = 10f;
+            const float kFriction = 6.5f;   // 每秒衰减系数
+            const float kStopSpeed = 28f;   // 低于此速度停
+
+            void StopInertia()
+            {
+                inertiaJob?.Pause();
+                inertiaJob = null;
+                velocityY = 0f;
+            }
+
+            void StartInertia()
+            {
+                StopInertia();
+                if (Mathf.Abs(velocityY) < kStopSpeed) return;
+
+                float v = velocityY;
+                inertiaJob = sv.schedule.Execute(() =>
+                {
+                    // 固定约 60fps 步进
+                    const float dt = 1f / 60f;
+                    // 指数摩擦
+                    v *= Mathf.Exp(-kFriction * dt);
+                    if (Mathf.Abs(v) < kStopSpeed)
+                    {
+                        SetMailScrollY(sv, sv.scrollOffset.y);
+                        StopInertia();
+                        return;
+                    }
+                    float next = sv.scrollOffset.y + v * dt;
+                    float max = GetMailScrollMaxY(sv);
+                    if (next <= 0f)
+                    {
+                        SetMailScrollY(sv, 0f);
+                        StopInertia();
+                        return;
+                    }
+                    if (next >= max)
+                    {
+                        SetMailScrollY(sv, max);
+                        StopInertia();
+                        return;
+                    }
+                    SetMailScrollY(sv, next);
+                }).Every(16);
+            }
+
+            sv.RegisterCallback<PointerDownEvent>(evt =>
+            {
+                if (evt.button != 0) return;
+                StopInertia();
+                holding = true;
+                dragging = false;
+                down = last = evt.position;
+                pointerId = evt.pointerId;
+                velocityY = 0f;
+                lastMoveTicks = DateTime.UtcNow.Ticks;
+            });
+
+            sv.RegisterCallback<PointerMoveEvent>(evt =>
+            {
+                if (!holding || evt.pointerId != pointerId) return;
+                var pos = evt.position;
+                if (!dragging)
+                {
+                    if (Vector2.Distance(down, pos) < kThreshold) return;
+                    dragging = true;
+                    sv.CapturePointer(pointerId);
+                }
+
+                float dy = pos.y - last.y; // 手指下移 dy>0 → 列表跟手下移 → offset 减小
+                last = pos;
+
+                long now = DateTime.UtcNow.Ticks;
+                float dt = (now - lastMoveTicks) / (float)TimeSpan.TicksPerSecond;
+                lastMoveTicks = now;
+                if (dt > 0.0001f && dt < 0.1f)
+                {
+                    // offset 变化量 / dt
+                    float inst = (-dy) / dt;
+                    velocityY = Mathf.Lerp(velocityY, inst, 0.35f);
+                }
+
+                SetMailScrollY(sv, sv.scrollOffset.y - dy);
+                evt.StopPropagation();
+            });
+
+            sv.RegisterCallback<PointerUpEvent>(evt =>
+            {
+                if (evt.pointerId != pointerId) return;
+                if (dragging && sv.HasPointerCapture(pointerId))
+                    sv.ReleasePointer(pointerId);
+
+                bool wasDragging = dragging;
+                holding = false;
+                dragging = false;
+                pointerId = -1;
+
+                // 最终钳一次，再惯性
+                SetMailScrollY(sv, sv.scrollOffset.y);
+                if (wasDragging)
+                    StartInertia();
+            });
+
+            sv.RegisterCallback<PointerCaptureOutEvent>(_ =>
+            {
+                holding = false;
+                dragging = false;
+                pointerId = -1;
+                SetMailScrollY(sv, sv.scrollOffset.y);
+            });
+
+            // 滚轮也钳制
+            sv.RegisterCallback<WheelEvent>(evt =>
+            {
+                StopInertia();
+                SetMailScrollY(sv, sv.scrollOffset.y + evt.delta.y * 0.5f);
+                // 不 StopPropagation，让默认也处理；再钳一次
+                sv.schedule.Execute(() => SetMailScrollY(sv, sv.scrollOffset.y)).ExecuteLater(0);
+            });
         }
 
         VisualElement MakeMailRow()
         {
+            // 整行：外层只负责间距，内层卡片实心底
             var row = new VisualElement { name = "MailRow" };
+            row.pickingMode = PickingMode.Position;
             row.style.flexDirection = FlexDirection.Column;
-            row.style.paddingTop = 10;
-            row.style.paddingBottom = 10;
-            row.style.paddingLeft = 10;
-            row.style.paddingRight = 10;
-            row.style.marginBottom = 8;
-            row.style.backgroundColor = new Color(0.20f, 0.22f, 0.28f, 1f);
-            row.style.borderTopLeftRadius = 8;
-            row.style.borderTopRightRadius = 8;
-            row.style.borderBottomLeftRadius = 8;
-            row.style.borderBottomRightRadius = 8;
+            row.style.marginBottom = 10;
+            row.style.flexShrink = 0;
+
+            var card = new VisualElement { name = "Mail_Card" };
+            card.pickingMode = PickingMode.Position;
+            card.style.flexDirection = FlexDirection.Column;
+            card.style.paddingTop = 12;
+            card.style.paddingBottom = 12;
+            card.style.paddingLeft = 12;
+            card.style.paddingRight = 12;
+            card.style.backgroundColor = new Color(0.20f, 0.22f, 0.28f, 1f);
+            card.style.borderTopLeftRadius = 8;
+            card.style.borderTopRightRadius = 8;
+            card.style.borderBottomLeftRadius = 8;
+            card.style.borderBottomRightRadius = 8;
+            card.style.minHeight = 72;
+
+            var top = new VisualElement { name = "Mail_Top" };
+            top.style.flexDirection = FlexDirection.Row;
+            top.style.justifyContent = Justify.SpaceBetween;
+            top.style.alignItems = Align.Center;
+            top.style.marginBottom = 6;
+            top.style.flexShrink = 0;
 
             var title = new Label { name = "Mail_Title" };
-            title.style.fontSize = 16;
+            title.style.fontSize = 15;
             title.style.unityFontStyleAndWeight = FontStyle.Bold;
             title.style.color = Color.white;
-            title.style.marginBottom = 4;
-            row.Add(title);
+            title.style.flexGrow = 1;
+            title.style.flexShrink = 1;
+            title.style.marginRight = 8;
+            title.style.overflow = Overflow.Hidden;
+            title.style.textOverflow = TextOverflow.Ellipsis;
+            title.style.whiteSpace = WhiteSpace.NoWrap;
+            title.style.unityTextAlign = TextAnchor.MiddleLeft;
+            title.style.height = 20;
+            top.Add(title);
 
-            var meta = new Label { name = "Mail_Meta" };
-            meta.style.fontSize = 11;
-            meta.style.color = new Color(0.6f, 0.65f, 0.72f, 1f);
-            meta.style.marginBottom = 6;
-            row.Add(meta);
+            var time = new Label { name = "Mail_Time" };
+            time.style.fontSize = 11;
+            time.style.color = new Color(0.55f, 0.59f, 0.66f, 1f);
+            time.style.flexShrink = 0;
+            time.style.unityTextAlign = TextAnchor.MiddleRight;
+            time.style.height = 18;
+            time.style.minWidth = 40;
+            top.Add(time);
+            card.Add(top);
 
-            var body = new Label { name = "Mail_Body" };
-            body.style.fontSize = 13;
-            body.style.color = new Color(0.82f, 0.85f, 0.90f, 1f);
-            body.style.whiteSpace = WhiteSpace.Normal;
-            body.style.marginBottom = 8;
-            row.Add(body);
+            var preview = new Label { name = "Mail_Preview" };
+            preview.style.fontSize = 12;
+            preview.style.color = new Color(0.70f, 0.73f, 0.78f, 1f);
+            preview.style.whiteSpace = WhiteSpace.Normal;
+            preview.style.overflow = Overflow.Hidden;
+            preview.style.height = 34;
+            preview.style.flexShrink = 0;
+            preview.style.unityTextAlign = TextAnchor.UpperLeft;
+            card.Add(preview);
 
-            var rewardRow = new VisualElement { name = "Mail_Rewards" };
-            rewardRow.style.flexDirection = FlexDirection.Row;
-            rewardRow.style.flexWrap = Wrap.Wrap;
-            rewardRow.style.marginBottom = 8;
-            row.Add(rewardRow);
+            var badge = new Label { name = "Mail_Badge" };
+            badge.style.fontSize = 11;
+            badge.style.color = new Color(0.47f, 0.78f, 0.55f, 1f);
+            badge.style.marginTop = 4;
+            badge.style.height = 16;
+            badge.style.display = DisplayStyle.None;
+            badge.style.flexShrink = 0;
+            card.Add(badge);
 
-            var actionRow = new VisualElement { name = "Mail_Actions" };
-            actionRow.style.flexDirection = FlexDirection.Row;
-            actionRow.style.justifyContent = Justify.FlexEnd;
-            row.Add(actionRow);
-
+            row.Add(card);
             return row;
         }
 
@@ -908,34 +1201,153 @@ namespace HotUpdate.UI
             var mail = _mailList[index];
 
             var title = row.Q<Label>("Mail_Title");
-            if (title != null)
+            if (title != null) title.text = mail.Title ?? "";
+
+            var time = row.Q<Label>("Mail_Time");
+            if (time != null) time.text = FormatMailRelativeTime(mail.SendTimeUnix);
+
+            var preview = row.Q<Label>("Mail_Preview");
+            if (preview != null) preview.text = MakeMailPreview(mail.Body, 36);
+
+            var badge = row.Q<Label>("Mail_Badge");
+            if (badge != null)
             {
-                var tag = (mail.Rewards != null && mail.Rewards.Count > 0) ? "【奖励】" : "【通知】";
-                title.text = tag + mail.Title;
+                bool hasReward = mail.Rewards != null && mail.Rewards.Count > 0;
+                if (hasReward && !mail.Claimed && !IsMailExpired(mail))
+                {
+                    badge.text = "有奖励可领";
+                    badge.style.display = DisplayStyle.Flex;
+                }
+                else if (hasReward && mail.Claimed)
+                {
+                    badge.text = "已领取";
+                    badge.style.color = new Color(0.55f, 0.6f, 0.65f, 1f);
+                    badge.style.display = DisplayStyle.Flex;
+                }
+                else
+                {
+                    badge.text = "";
+                    badge.style.display = DisplayStyle.None;
+                }
             }
 
-            var meta = row.Q<Label>("Mail_Meta");
+            // 整行可点进详情；与拖动滚动区分（移动超过阈值不触发）
+            row.userData = mail.Id;
+            ClearListItemHover(row);
+            row.UnregisterCallback<PointerDownEvent>(OnMailRowPointerDown);
+            row.UnregisterCallback<PointerMoveEvent>(OnMailRowPointerMove);
+            row.UnregisterCallback<PointerUpEvent>(OnMailRowPointerUp);
+            row.RegisterCallback<PointerDownEvent>(OnMailRowPointerDown);
+            row.RegisterCallback<PointerMoveEvent>(OnMailRowPointerMove);
+            row.RegisterCallback<PointerUpEvent>(OnMailRowPointerUp);
+        }
+
+        Vector2 _mailPointerDown;
+        bool _mailPointerMoved;
+        long _mailPointerId = -1;
+
+        void OnMailRowPointerDown(PointerDownEvent evt)
+        {
+            _mailPointerDown = evt.position;
+            _mailPointerMoved = false;
+            _mailPointerId = evt.pointerId;
+        }
+
+        void OnMailRowPointerMove(PointerMoveEvent evt)
+        {
+            if (evt.pointerId != _mailPointerId) return;
+            if (Vector2.Distance(_mailPointerDown, evt.position) > 12f)
+                _mailPointerMoved = true;
+        }
+
+        void OnMailRowPointerUp(PointerUpEvent evt)
+        {
+            if (evt.pointerId != _mailPointerId) return;
+            _mailPointerId = -1;
+            if (_mailPointerMoved) return;
+            var row = evt.currentTarget as VisualElement;
+            if (row?.userData is long id)
+            {
+                var mail = _mailList?.Find(m => m.Id == id);
+                if (mail != null)
+                    ShowMailDetail(mail);
+            }
+        }
+
+        void ShowMailDetail(MailEntry mail)
+        {
+            ShowMailDetailAsync(mail).Forget();
+        }
+
+        async UniTaskVoid ShowMailDetailAsync(MailEntry mail)
+        {
+            if (mail == null) return;
+            EnsureDoc();
+            _root.Q("UI_MailDetail")?.RemoveFromHierarchy();
+
+            var vta = await LoadMailUxmlAsync("UI_MailDetail");
+            VisualElement root;
+            if (vta != null)
+            {
+                root = vta.Instantiate();
+                root.name = "UI_MailDetail";
+            }
+            else
+            {
+                Debug.LogWarning("[Mail] UI_MailDetail.uxml 缺失，使用简易详情");
+                root = BuildMailDetailFallback();
+            }
+
+            root.style.position = Position.Absolute;
+            root.style.left = 0;
+            root.style.right = 0;
+            root.style.top = 0;
+            root.style.bottom = 0;
+
+            void CloseDetail() => root.RemoveFromHierarchy();
+
+            var btnBack = root.Q<Button>("UI_MailDetail_BtnBack");
+            if (btnBack != null)
+            {
+                WireClickSfx(btnBack);
+                btnBack.clicked += CloseDetail;
+            }
+            var btnClose = root.Q<Button>("UI_MailDetail_BtnClose");
+            if (btnClose != null)
+            {
+                WireClickSfx(btnClose);
+                btnClose.clicked += () =>
+                {
+                    CloseDetail();
+                    _root.Q("UI_Mail")?.RemoveFromHierarchy();
+                };
+            }
+
+            var title = root.Q<Label>("UI_MailDetail_Title");
+            if (title != null) title.text = mail.Title ?? "";
+
+            var meta = root.Q<Label>("UI_MailDetail_Meta");
             if (meta != null)
             {
                 var expired = IsMailExpired(mail);
-                meta.text = $"发送：{FormatMailTime(mail.SendTimeUnix)}    过期：{FormatMailTime(mail.ExpireTimeUnix)}"
+                meta.text =
+                    $"发送：{FormatMailTime(mail.SendTimeUnix)}    过期：{FormatMailTime(mail.ExpireTimeUnix)}"
                     + (expired ? "  (已过期)" : "")
                     + (mail.Claimed ? "  (已领取)" : "");
                 meta.style.color = expired
                     ? new Color(0.85f, 0.45f, 0.4f, 1f)
-                    : new Color(0.6f, 0.65f, 0.72f, 1f);
+                    : new Color(0.55f, 0.59f, 0.66f, 1f);
             }
 
-            var body = row.Q<Label>("Mail_Body");
+            var body = root.Q<Label>("UI_MailDetail_Body");
             if (body != null) body.text = mail.Body ?? "";
 
-            var rewardRow = row.Q("Mail_Rewards");
+            var rewardRow = root.Q("UI_MailDetail_Rewards");
             if (rewardRow != null)
             {
                 rewardRow.Clear();
                 if (mail.Rewards != null && mail.Rewards.Count > 0)
                 {
-                    rewardRow.style.display = DisplayStyle.Flex;
                     foreach (var r in mail.Rewards)
                     {
                         var chip = new VisualElement();
@@ -953,16 +1365,13 @@ namespace HotUpdate.UI
                         chip.style.borderBottomLeftRadius = 6;
                         chip.style.borderBottomRightRadius = 6;
 
-                        var icon = new VisualElement { name = "Mail_RewardIcon" };
+                        var icon = new VisualElement();
                         icon.style.width = 28;
                         icon.style.height = 28;
                         icon.style.marginRight = 4;
                         icon.style.unityBackgroundScaleMode = ScaleMode.ScaleToFit;
-                        var iconName = r.Icon;
-                        if (!string.IsNullOrEmpty(iconName))
-                        {
-                            LoadMailIconAsync(icon, iconName).Forget();
-                        }
+                        if (!string.IsNullOrEmpty(r.Icon))
+                            ApplyMailIcon(icon, r.Icon);
                         chip.Add(icon);
 
                         var lbl = new Label($"{r.Name} x{r.Count}");
@@ -972,13 +1381,9 @@ namespace HotUpdate.UI
                         rewardRow.Add(chip);
                     }
                 }
-                else
-                {
-                    rewardRow.style.display = DisplayStyle.None;
-                }
             }
 
-            var actionRow = row.Q("Mail_Actions");
+            var actionRow = root.Q("UI_MailDetail_Actions");
             if (actionRow != null)
             {
                 actionRow.Clear();
@@ -991,7 +1396,12 @@ namespace HotUpdate.UI
                     StyleMailActionBtn(btnClaim, new Color(0.22f, 0.55f, 0.35f, 1f));
                     WireClickSfx(btnClaim);
                     var captured = mail;
-                    btnClaim.clicked += () => OnMailClaim(captured);
+                    btnClaim.clicked += () =>
+                    {
+                        OnMailClaim(captured);
+                        root.RemoveFromHierarchy();
+                        ShowMailDetail(captured);
+                    };
                     actionRow.Add(btnClaim);
                 }
                 else if (hasReward && mail.Claimed)
@@ -1000,7 +1410,6 @@ namespace HotUpdate.UI
                     done.style.fontSize = 13;
                     done.style.color = new Color(0.55f, 0.75f, 0.6f, 1f);
                     done.style.marginRight = 8;
-                    done.style.unityTextAlign = TextAnchor.MiddleCenter;
                     actionRow.Add(done);
                 }
 
@@ -1008,8 +1417,111 @@ namespace HotUpdate.UI
                 StyleMailActionBtn(btnDel, new Color(0.5f, 0.28f, 0.28f, 1f));
                 WireClickSfx(btnDel);
                 var delTarget = mail;
-                btnDel.clicked += () => OnMailDelete(delTarget);
+                btnDel.clicked += () =>
+                {
+                    OnMailDelete(delTarget);
+                    root.RemoveFromHierarchy();
+                };
                 actionRow.Add(btnDel);
+            }
+
+            root.RegisterCallback<ClickEvent>(evt =>
+            {
+                if (evt.target == root)
+                    root.RemoveFromHierarchy();
+            });
+
+            // 详情正文也触屏拖动、无滚动条
+            var detailScroll = root.Q<ScrollView>("UI_MailDetail_Scroll");
+            if (detailScroll != null)
+            {
+                detailScroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+                detailScroll.verticalScrollerVisibility = ScrollerVisibility.Hidden;
+                detailScroll.touchScrollBehavior = ScrollView.TouchScrollBehavior.Elastic;
+                detailScroll.elasticity = 0.1f;
+                detailScroll.scrollDecelerationRate = 0.135f;
+            }
+
+            _root.Add(root);
+            root.BringToFront();
+        }
+
+        VisualElement BuildMailDetailFallback()
+        {
+            var root = new VisualElement { name = "UI_MailDetail" };
+            root.style.backgroundColor = new Color(0, 0, 0, 0.45f);
+            root.style.justifyContent = Justify.Center;
+            root.style.alignItems = Align.Center;
+            var card = new VisualElement { name = "UI_MailDetail_Card" };
+            card.style.width = 400;
+            card.style.maxWidth = Length.Percent(94);
+            card.style.height = 520;
+            card.style.paddingTop = 14;
+            card.style.paddingBottom = 12;
+            card.style.paddingLeft = 14;
+            card.style.paddingRight = 14;
+            card.style.backgroundColor = new Color(0.14f, 0.16f, 0.22f, 1f);
+            card.style.borderTopLeftRadius = 12;
+            card.style.borderTopRightRadius = 12;
+            card.style.borderBottomLeftRadius = 12;
+            card.style.borderBottomRightRadius = 12;
+            card.style.flexDirection = FlexDirection.Column;
+            var titleRow = new VisualElement { name = "UI_MailDetail_TitleRow" };
+            titleRow.style.flexDirection = FlexDirection.Row;
+            titleRow.style.justifyContent = Justify.SpaceBetween;
+            titleRow.Add(new Button { text = "‹ 返回", name = "UI_MailDetail_BtnBack" });
+            titleRow.Add(new Button { text = "×", name = "UI_MailDetail_BtnClose" });
+            card.Add(titleRow);
+            card.Add(new Label { name = "UI_MailDetail_Title" });
+            card.Add(new Label { name = "UI_MailDetail_Meta" });
+            var scroll = new ScrollView { name = "UI_MailDetail_Scroll" };
+            scroll.style.flexGrow = 1;
+            scroll.Add(new Label { name = "UI_MailDetail_Body" });
+            scroll.Add(new VisualElement { name = "UI_MailDetail_Rewards" });
+            card.Add(scroll);
+            card.Add(new VisualElement { name = "UI_MailDetail_Actions" });
+            root.Add(card);
+            return root;
+        }
+
+
+        /// <summary>模仿手机列表：按住拖动 + 惯性，隐藏桌面滚动条。</summary>
+        static void ConfigureTouchScroll(ListView listView)
+        {
+            if (listView == null) return;
+
+            // 只通过查询取内部 ScrollView（不要用 listView.scrollView，部分版本无此 API）
+            var sv = listView.Q<ScrollView>();
+            if (sv == null) return;
+
+            sv.mode = ScrollViewMode.Vertical;
+            sv.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            sv.verticalScrollerVisibility = ScrollerVisibility.Hidden;
+            sv.touchScrollBehavior = ScrollView.TouchScrollBehavior.Elastic;
+            sv.elasticity = 0.1f;
+            sv.scrollDecelerationRate = 0.135f;
+            sv.mouseWheelScrollSize = 40f;
+        }
+
+        /// <summary>清掉 ListView 行容器默认 hover 白底。</summary>
+        static void ClearListItemHover(VisualElement row)
+        {
+            if (row == null) return;
+            // makeItem 返回的元素外层常被包成 unity-list-view__item
+            var p = row.parent;
+            for (int i = 0; i < 3 && p != null; i++, p = p.parent)
+            {
+                p.style.backgroundColor = Color.clear;
+                p.RegisterCallback<PointerEnterEvent>(evt =>
+                {
+                    if (evt.currentTarget is VisualElement ve)
+                        ve.style.backgroundColor = Color.clear;
+                });
+                p.RegisterCallback<PointerLeaveEvent>(evt =>
+                {
+                    if (evt.currentTarget is VisualElement ve)
+                        ve.style.backgroundColor = Color.clear;
+                });
             }
         }
 
@@ -1027,13 +1539,84 @@ namespace HotUpdate.UI
             btn.style.borderBottomRightRadius = 6;
         }
 
+        /// <summary>
+        /// 道具图标：优先读 Art/Sprites 的 .meta 对应资源（与 UI_Home 的 project:// URL 同源），
+        /// Editor 用 AssetDatabase；真机再走 ResManager sprites/{name}。
+        /// </summary>
+        static readonly Dictionary<string, (string path, long fileId, string guid, string spriteName)> ItemIconMeta = new()
+        {
+            // 从 Assets/Art/Sprites/item_*.png.meta 解析
+            ["item_energy_10"] = ("Assets/Art/Sprites/item_energy_10.png", -5040561177488907544L, "f04116923d6845241aa01e8eefce281c", "icon_03_0"),
+            ["item_hammer"]    = ("Assets/Art/Sprites/item_hammer.png",     2407735339859285361L,  "bd4543475cd514d4f9787527a80b2242", "icon_04_0"),
+            ["item_gold"]      = ("Assets/Art/Sprites/item_gold.png",       4673908504923276263L,  "105bbc148c38e3f4b932eb77b379e48c", "icon_01_0"),
+            ["item_diamond"]   = ("Assets/Art/Sprites/item_diamond.png",   -9065347158251605998L, "85ea7ce944e75a54fa108a76c6a0376a", "icon_02_0"),
+            ["item_steps_3"]   = ("Assets/Art/Sprites/item_steps_3.png",   -5608538184493476184L, "e0fa01ea9e4828c4ea314cd7dc5c6ef0", "icon_05_0"),
+            ["item_score_20"]  = ("Assets/Art/Sprites/item_score_20.png",   904365746381333925L,  "efe8d27332740b4499b78292958b64c7", "icon_06_0"),
+            ["item_rocket_h"]  = ("Assets/Art/Sprites/item_rocket_h.png",  -5644966865477618822L, "5d6b70159f1abc74984be18ce0a9fcdd", "icon_07_0"),
+            ["item_rocket_v"]  = ("Assets/Art/Sprites/item_rocket_v.png",  -6240440480978129834L, "ae71ed0a3ec4fb440b7641c79e44d3b8", "icon_08_0"),
+            ["item_flower_5col"]= ("Assets/Art/Sprites/item_flower_5col.png",8558041250643444950L, "f488ab70fca4cd14bb2c5d25aedd89f8", "icon_09_0"),
+        };
+
+        /// <summary>与 UI_Home.uxml 相同格式的 project:// background URL。</summary>
+        static string BuildItemIconProjectUrl(string iconName)
+        {
+            if (!ItemIconMeta.TryGetValue(iconName, out var m))
+                return null;
+            return $"project://database/{m.path}?fileID={m.fileId}&guid={m.guid}&type=3#{m.spriteName}";
+        }
+
+        void ApplyMailIcon(VisualElement iconVe, string iconName)
+        {
+            if (iconVe == null || string.IsNullOrEmpty(iconName)) return;
+
+            // 1) Editor：直接 AssetDatabase 取 Sprite（最稳，等同读 .meta）
+#if UNITY_EDITOR
+            if (ItemIconMeta.TryGetValue(iconName, out var meta))
+            {
+                var objs = UnityEditor.AssetDatabase.LoadAllAssetsAtPath(meta.path);
+                Sprite sp = null;
+                if (objs != null)
+                {
+                    foreach (var o in objs)
+                    {
+                        if (o is Sprite s && (s.name == meta.spriteName || sp == null))
+                            sp = s;
+                    }
+                }
+                if (sp == null)
+                    sp = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(meta.path);
+                if (sp != null)
+                {
+                    iconVe.style.backgroundImage = new StyleBackground(sp);
+                    iconVe.style.unityBackgroundScaleMode = ScaleMode.ScaleToFit;
+                    return;
+                }
+            }
+#endif
+            // 2) 异步 AB / ResManager
+            LoadMailIconAsync(iconVe, iconName).Forget();
+        }
+
         async UniTaskVoid LoadMailIconAsync(VisualElement iconVe, string iconName)
         {
             try
             {
-                var sp = await ResManager.LoadSpriteAsync(iconName);
+                Sprite sp = null;
+                // 先按配置表里的原名，再试 Bundles/Sprites
+                try { sp = await ResManager.LoadSpriteAsync(iconName); } catch { /* ignore */ }
+                if (sp == null && ItemIconMeta.TryGetValue(iconName, out var meta))
+                {
+                    try { sp = await ResManager.LoadSpriteAsync(meta.spriteName); } catch { /* ignore */ }
+                }
                 if (sp != null && iconVe != null && iconVe.panel != null)
+                {
                     iconVe.style.backgroundImage = new StyleBackground(sp);
+                    iconVe.style.unityBackgroundScaleMode = ScaleMode.ScaleToFit;
+                }
+                else
+                {
+                    Debug.LogWarning($"[Mail] icon missing: {iconName} (请确认 Art/Sprites 与 Bundles/Sprites 已导入)");
+                }
             }
             catch (Exception e)
             {
@@ -1059,23 +1642,19 @@ namespace HotUpdate.UI
                 ? string.Join("、", mail.Rewards.ConvertAll(r => $"{r.Name}x{r.Count}"))
                 : "";
             ShowTip(string.IsNullOrEmpty(names) ? "领取成功" : $"已领取：{names}");
-            _mailListView?.RefreshItems();
+            RebuildMailListContent();
         }
 
         void OnMailDelete(MailEntry mail)
         {
             if (mail == null || _mailList == null) return;
             _mailList.RemoveAll(m => m.Id == mail.Id);
-            if (_mailListView != null)
-            {
-                _mailListView.itemsSource = _mailList;
-                _mailListView.Rebuild();
-            }
+            RebuildMailListContent();
             var popup = _root?.Q("UI_Mail");
             var empty = popup?.Q("UI_Mail_Empty");
-            var list = popup?.Q("UI_Mail_List");
+            var scroll = popup?.Q("UI_Mail_Scroll");
             if (empty != null) empty.style.display = _mailList.Count == 0 ? DisplayStyle.Flex : DisplayStyle.None;
-            if (list != null) list.style.display = _mailList.Count == 0 ? DisplayStyle.None : DisplayStyle.Flex;
+            if (scroll != null) scroll.style.display = _mailList.Count == 0 ? DisplayStyle.None : DisplayStyle.Flex;
             ShowTip("已删除");
         }
 
