@@ -53,6 +53,10 @@ namespace HotUpdate.UI
 
         string _currentUIAsset; // 当前 AB 加载的 UI 资源名（用于卸载）
 
+        // 非全屏弹窗统一样式（Dialog / Confirm / Settings / Mail）
+        static readonly Color PopupOverlayColor = new Color(0f, 0f, 0f, 0.55f);
+        static readonly Color PopupCardColor = new Color(0.16f, 0.18f, 0.24f, 1f);
+
         public UIPanel CurrentPanel { get; private set; } = UIPanel.None;
         public string CurrentUIAsset => _currentUIAsset;
 
@@ -182,80 +186,70 @@ namespace HotUpdate.UI
         public async UniTask ShowDialogAsync(string message, string title = null, string okText = "确定", CancellationToken ct = default)
         {
             EnsureDoc();
-            // 去掉旧弹窗
             _root.Q("UI_Dialog")?.RemoveFromHierarchy();
 
             var tcs = new UniTaskCompletionSource();
             using var reg = ct.Register(() => tcs.TrySetCanceled());
 
-            var mask = new VisualElement { name = "UI_Dialog" };
+            var vta = await LoadPopupUxmlAsync("UI_Dialog");
+            VisualElement mask;
+            if (vta != null)
+            {
+                mask = vta.Instantiate();
+                mask.name = "UI_Dialog";
+            }
+            else
+            {
+                Debug.LogWarning("[UI] UI_Dialog.uxml 缺失，回退代码构建");
+                mask = BuildFallbackDialogMask();
+            }
+
             mask.style.position = Position.Absolute;
             mask.style.left = 0;
             mask.style.right = 0;
             mask.style.top = 0;
             mask.style.bottom = 0;
-            mask.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
-            mask.style.justifyContent = Justify.Center;
-            mask.style.alignItems = Align.Center;
-            mask.pickingMode = PickingMode.Position;
 
-            var card = new VisualElement { name = "UI_Dialog_Card" };
-            card.style.width = 340;
-            card.style.maxWidth = Length.Percent(90);
-            card.style.paddingTop = 20;
-            card.style.paddingBottom = 18;
-            card.style.paddingLeft = 20;
-            card.style.paddingRight = 20;
-            card.style.backgroundColor = new Color(0.16f, 0.18f, 0.24f, 1f);
-            card.style.borderTopLeftRadius = 12;
-            card.style.borderTopRightRadius = 12;
-            card.style.borderBottomLeftRadius = 12;
-            card.style.borderBottomRightRadius = 12;
-            card.style.alignItems = Align.Stretch;
-
-            if (!string.IsNullOrEmpty(title))
+            var titleLabel = mask.Q<Label>("UI_Dialog_Title");
+            if (titleLabel != null)
             {
-                var titleLabel = new Label(title) { name = "UI_Dialog_Title" };
-                titleLabel.style.fontSize = 20;
-                titleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-                titleLabel.style.color = Color.white;
-                titleLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-                titleLabel.style.marginBottom = 12;
-                card.Add(titleLabel);
+                if (string.IsNullOrEmpty(title))
+                    titleLabel.style.display = DisplayStyle.None;
+                else
+                {
+                    titleLabel.text = title;
+                    titleLabel.style.display = DisplayStyle.Flex;
+                }
             }
 
-            var body = new Label(message ?? "") { name = "UI_Dialog_Body" };
-            body.style.fontSize = 16;
-            body.style.color = new Color(0.92f, 0.93f, 0.96f, 1f);
-            body.style.whiteSpace = WhiteSpace.Normal;
-            body.style.unityTextAlign = TextAnchor.MiddleCenter;
-            body.style.marginBottom = 18;
-            card.Add(body);
+            var body = mask.Q<Label>("UI_Dialog_Body");
+            if (body != null) body.text = message ?? "";
 
-            var ok = new Button { text = string.IsNullOrEmpty(okText) ? "确定" : okText, name = "UI_Dialog_Ok" };
-            ok.style.height = 42;
-            ok.style.fontSize = 16;
-            ok.style.backgroundColor = new Color(0.25f, 0.55f, 0.95f, 1f);
-            ok.style.color = Color.white;
-            ok.style.borderTopLeftRadius = 8;
-            ok.style.borderTopRightRadius = 8;
-            ok.style.borderBottomLeftRadius = 8;
-            ok.style.borderBottomRightRadius = 8;
-            WireClickSfx(ok);
-            ok.clicked += () =>
+            var ok = mask.Q<Button>("UI_Dialog_Ok");
+            if (ok != null)
             {
-                mask.RemoveFromHierarchy();
-                tcs.TrySetResult();
-            };
-            card.Add(ok);
+                ok.text = string.IsNullOrEmpty(okText) ? "确定" : okText;
+                WireClickSfx(ok);
+                ok.clicked += () =>
+                {
+                    mask.RemoveFromHierarchy();
+                    tcs.TrySetResult();
+                };
+            }
 
-            mask.Add(card);
+            mask.RegisterCallback<ClickEvent>(evt =>
+            {
+                if (evt.target == mask)
+                {
+                    mask.RemoveFromHierarchy();
+                    tcs.TrySetResult();
+                }
+            });
+
             _root.Add(mask);
+            mask.BringToFront();
 
-            try
-            {
-                await tcs.Task;
-            }
+            try { await tcs.Task; }
             catch (OperationCanceledException)
             {
                 mask.RemoveFromHierarchy();
@@ -263,115 +257,106 @@ namespace HotUpdate.UI
             }
         }
 
-
+        VisualElement BuildFallbackDialogMask()
+        {
+            var mask = new VisualElement { name = "UI_Dialog" };
+            mask.style.backgroundColor = PopupOverlayColor;
+            mask.style.justifyContent = Justify.Center;
+            mask.style.alignItems = Align.Center;
+            mask.pickingMode = PickingMode.Position;
+            var card = new VisualElement { name = "UI_Dialog_Card" };
+            card.style.width = 340;
+            card.style.paddingTop = 20;
+            card.style.paddingBottom = 18;
+            card.style.paddingLeft = 20;
+            card.style.paddingRight = 20;
+            card.style.backgroundColor = PopupCardColor;
+            card.style.borderTopLeftRadius = 12;
+            card.style.borderTopRightRadius = 12;
+            card.style.borderBottomLeftRadius = 12;
+            card.style.borderBottomRightRadius = 12;
+            card.Add(new Label { name = "UI_Dialog_Title" });
+            card.Add(new Label { name = "UI_Dialog_Body" });
+            card.Add(new Button { name = "UI_Dialog_Ok", text = "确定" });
+            mask.Add(card);
+            return mask;
+        }
 
         /// <summary>是/否确认框。返回 true = 点「是」。</summary>
         public async UniTask<bool> ShowConfirmAsync(
             string message,
-            string title = null,
+            string title = "确认",
             string yesText = "是",
             string noText = "否",
             CancellationToken ct = default)
         {
             EnsureDoc();
-            _root.Q("UI_Dialog")?.RemoveFromHierarchy();
+            _root.Q("UI_Confirm")?.RemoveFromHierarchy();
 
             var tcs = new UniTaskCompletionSource<bool>();
             using var reg = ct.Register(() => tcs.TrySetCanceled());
 
-            var mask = new VisualElement { name = "UI_Dialog" };
+            var vta = await LoadPopupUxmlAsync("UI_Confirm");
+            VisualElement mask;
+            if (vta != null)
+            {
+                mask = vta.Instantiate();
+                mask.name = "UI_Confirm";
+            }
+            else
+            {
+                mask = new VisualElement { name = "UI_Confirm" };
+                mask.style.backgroundColor = PopupOverlayColor;
+                mask.style.justifyContent = Justify.Center;
+                mask.style.alignItems = Align.Center;
+                var card = new VisualElement();
+                card.Add(new Label { name = "UI_Confirm_Title" });
+                card.Add(new Label { name = "UI_Confirm_Body" });
+                var row = new VisualElement { name = "UI_Confirm_Row" };
+                row.Add(new Button { name = "UI_Confirm_No", text = "否" });
+                row.Add(new Button { name = "UI_Confirm_Yes", text = "是" });
+                card.Add(row);
+                mask.Add(card);
+            }
+
             mask.style.position = Position.Absolute;
             mask.style.left = 0;
             mask.style.right = 0;
             mask.style.top = 0;
             mask.style.bottom = 0;
-            mask.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
-            mask.style.justifyContent = Justify.Center;
-            mask.style.alignItems = Align.Center;
-            mask.pickingMode = PickingMode.Position;
 
-            var card = new VisualElement { name = "UI_Dialog_Card" };
-            card.style.width = 340;
-            card.style.maxWidth = Length.Percent(90);
-            card.style.paddingTop = 20;
-            card.style.paddingBottom = 18;
-            card.style.paddingLeft = 20;
-            card.style.paddingRight = 20;
-            card.style.backgroundColor = new Color(0.16f, 0.18f, 0.24f, 1f);
-            card.style.borderTopLeftRadius = 12;
-            card.style.borderTopRightRadius = 12;
-            card.style.borderBottomLeftRadius = 12;
-            card.style.borderBottomRightRadius = 12;
-            card.style.alignItems = Align.Stretch;
+            var titleLabel = mask.Q<Label>("UI_Confirm_Title");
+            if (titleLabel != null) titleLabel.text = string.IsNullOrEmpty(title) ? "确认" : title;
+            var body = mask.Q<Label>("UI_Confirm_Body");
+            if (body != null) body.text = message ?? "";
 
-            if (!string.IsNullOrEmpty(title))
+            var btnNo = mask.Q<Button>("UI_Confirm_No");
+            if (btnNo != null)
             {
-                var titleLabel = new Label(title) { name = "UI_Dialog_Title" };
-                titleLabel.style.fontSize = 20;
-                titleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-                titleLabel.style.color = Color.white;
-                titleLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-                titleLabel.style.marginBottom = 12;
-                card.Add(titleLabel);
+                btnNo.text = string.IsNullOrEmpty(noText) ? "否" : noText;
+                WireClickSfx(btnNo);
+                btnNo.clicked += () =>
+                {
+                    mask.RemoveFromHierarchy();
+                    tcs.TrySetResult(false);
+                };
+            }
+            var btnYes = mask.Q<Button>("UI_Confirm_Yes");
+            if (btnYes != null)
+            {
+                btnYes.text = string.IsNullOrEmpty(yesText) ? "是" : yesText;
+                WireClickSfx(btnYes);
+                btnYes.clicked += () =>
+                {
+                    mask.RemoveFromHierarchy();
+                    tcs.TrySetResult(true);
+                };
             }
 
-            var body = new Label(message ?? "") { name = "UI_Dialog_Body" };
-            body.style.fontSize = 16;
-            body.style.color = new Color(0.9f, 0.92f, 0.95f, 1f);
-            body.style.whiteSpace = WhiteSpace.Normal;
-            body.style.unityTextAlign = TextAnchor.MiddleCenter;
-            body.style.marginBottom = 18;
-            card.Add(body);
-
-            var row = new VisualElement();
-            row.style.flexDirection = FlexDirection.Row;
-            row.style.justifyContent = Justify.Center;
-
-            var noBtn = new Button { text = string.IsNullOrEmpty(noText) ? "否" : noText, name = "UI_Dialog_No" };
-            noBtn.style.height = 42;
-            noBtn.style.width = 120;
-            noBtn.style.fontSize = 16;
-            noBtn.style.marginRight = 12;
-            noBtn.style.backgroundColor = new Color(0.4f, 0.42f, 0.48f, 1f);
-            noBtn.style.color = Color.white;
-            noBtn.style.borderTopLeftRadius = 8;
-            noBtn.style.borderTopRightRadius = 8;
-            noBtn.style.borderBottomLeftRadius = 8;
-            noBtn.style.borderBottomRightRadius = 8;
-            WireClickSfx(noBtn);
-            noBtn.clicked += () =>
-            {
-                mask.RemoveFromHierarchy();
-                tcs.TrySetResult(false);
-            };
-            row.Add(noBtn);
-
-            var yesBtn = new Button { text = string.IsNullOrEmpty(yesText) ? "是" : yesText, name = "UI_Dialog_Yes" };
-            yesBtn.style.height = 42;
-            yesBtn.style.width = 120;
-            yesBtn.style.fontSize = 16;
-            yesBtn.style.backgroundColor = new Color(0.85f, 0.35f, 0.35f, 1f);
-            yesBtn.style.color = Color.white;
-            yesBtn.style.borderTopLeftRadius = 8;
-            yesBtn.style.borderTopRightRadius = 8;
-            yesBtn.style.borderBottomLeftRadius = 8;
-            yesBtn.style.borderBottomRightRadius = 8;
-            WireClickSfx(yesBtn);
-            yesBtn.clicked += () =>
-            {
-                mask.RemoveFromHierarchy();
-                tcs.TrySetResult(true);
-            };
-            row.Add(yesBtn);
-
-            card.Add(row);
-            mask.Add(card);
             _root.Add(mask);
+            mask.BringToFront();
 
-            try
-            {
-                return await tcs.Task;
-            }
+            try { return await tcs.Task; }
             catch (OperationCanceledException)
             {
                 mask.RemoveFromHierarchy();
@@ -379,47 +364,30 @@ namespace HotUpdate.UI
             }
         }
 
-        /// <summary>
-        /// 主页设置弹窗：昵称 / 玩家ID / BGM·音效开关 / 联系客服 / 隐私协议 / 客户端版本。
-        /// </summary>
         void ShowSettingsPopup()
+        {
+            ShowSettingsPopupAsync().Forget();
+        }
+
+        async UniTaskVoid ShowSettingsPopupAsync()
         {
             EnsureDoc();
             _root.Q("UI_Settings")?.RemoveFromHierarchy();
 
-            var mask = new VisualElement { name = "UI_Settings" };
+            var vta = await LoadPopupUxmlAsync("UI_Settings");
+            if (vta == null)
+            {
+                Debug.LogError("[UI] UI_Settings.uxml 加载失败");
+                return;
+            }
+
+            var mask = vta.Instantiate();
+            mask.name = "UI_Settings";
             mask.style.position = Position.Absolute;
             mask.style.left = 0;
             mask.style.right = 0;
             mask.style.top = 0;
             mask.style.bottom = 0;
-            mask.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
-            mask.style.justifyContent = Justify.Center;
-            mask.style.alignItems = Align.Center;
-            mask.pickingMode = PickingMode.Position;
-
-            var card = new VisualElement { name = "UI_Settings_Card" };
-            card.style.width = 360;
-            card.style.maxWidth = Length.Percent(92);
-            card.style.paddingTop = 20;
-            card.style.paddingBottom = 18;
-            card.style.paddingLeft = 20;
-            card.style.paddingRight = 20;
-            card.style.backgroundColor = new Color(0.16f, 0.18f, 0.24f, 1f);
-            card.style.borderTopLeftRadius = 12;
-            card.style.borderTopRightRadius = 12;
-            card.style.borderBottomLeftRadius = 12;
-            card.style.borderBottomRightRadius = 12;
-            card.style.alignItems = Align.Stretch;
-
-            // 标题
-            var titleLabel = new Label("设置") { name = "UI_Settings_Title" };
-            titleLabel.style.fontSize = 20;
-            titleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            titleLabel.style.color = Color.white;
-            titleLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            titleLabel.style.marginBottom = 16;
-            card.Add(titleLabel);
 
             var profile = _player?.Profile;
             string nick = string.IsNullOrEmpty(profile?.nickname) ? "Player" : profile.nickname;
@@ -427,95 +395,71 @@ namespace HotUpdate.UI
                 ? (string.IsNullOrEmpty(profile?.mp_account_id) ? "—" : profile.mp_account_id)
                 : profile.id;
 
-            // 昵称行：昵称 + 修改按钮
-            var nickRow = MakeSettingsRow();
-            var nickLabel = new Label($"昵称：{nick}");
-            StyleSettingsLabel(nickLabel);
-            nickLabel.style.flexGrow = 1;
-            nickRow.Add(nickLabel);
-            var btnRename = new Button { text = "修改", name = "UI_Settings_BtnRename" };
-            StyleSmallButton(btnRename, new Color(0.25f, 0.55f, 0.95f, 1f));
-            WireClickSfx(btnRename);
-            btnRename.clicked += () =>
+            var nickLabel = mask.Q<Label>("UI_Settings_Nick");
+            if (nickLabel != null) nickLabel.text = $"昵称：{nick}";
+
+            var idLabel = mask.Q<Label>("UI_Settings_PlayerId");
+            if (idLabel != null) idLabel.text = $"玩家ID：{playerId}";
+
+            var btnRename = mask.Q<Button>("UI_Settings_BtnRename");
+            if (btnRename != null)
             {
-                ShowRenameNicknameDialog(nickLabel);
-            };
-            nickRow.Add(btnRename);
-            card.Add(nickRow);
+                WireClickSfx(btnRename);
+                btnRename.clicked += () => ShowRenameNicknameDialog(nickLabel);
+            }
 
-            // 玩家ID
-            var idRow = MakeSettingsRow();
-            var idLabel = new Label($"玩家ID：{playerId}");
-            StyleSettingsLabel(idLabel);
-            idRow.Add(idLabel);
-            card.Add(idRow);
-
-            // 背景音乐 Toggle → AudioManager
-            var bgmToggle = new Toggle("背景音乐") { name = "UI_Settings_Bgm", value = _audio == null || _audio.BgmEnabled };
-            StyleSettingsToggle(bgmToggle);
-            bgmToggle.RegisterValueChangedCallback(evt =>
+            var bgmToggle = mask.Q<Toggle>("UI_Settings_Bgm");
+            if (bgmToggle != null)
             {
-                _audio?.SetBgmEnabled(evt.newValue);
-            });
-            card.Add(bgmToggle);
-
-            // 音效 Toggle → AudioManager
-            var sfxToggle = new Toggle("音效") { name = "UI_Settings_Sfx", value = _audio == null || _audio.SfxEnabled };
-            StyleSettingsToggle(sfxToggle);
-            sfxToggle.RegisterValueChangedCallback(evt =>
+                bgmToggle.value = _audio == null || _audio.BgmEnabled;
+                bgmToggle.RegisterValueChangedCallback(evt => _audio?.SetBgmEnabled(evt.newValue));
+            }
+            var sfxToggle = mask.Q<Toggle>("UI_Settings_Sfx");
+            if (sfxToggle != null)
             {
-                _audio?.SetSfxEnabled(evt.newValue);
-            });
-            card.Add(sfxToggle);
+                sfxToggle.value = _audio == null || _audio.SfxEnabled;
+                sfxToggle.RegisterValueChangedCallback(evt => _audio?.SetSfxEnabled(evt.newValue));
+            }
 
-            // 联系客服
-            var btnCs = new Button { text = "联系客服", name = "UI_Settings_BtnCs" };
-            StyleFullWidthButton(btnCs, new Color(0.22f, 0.48f, 0.72f, 1f));
-            WireClickSfx(btnCs);
-            btnCs.clicked += () =>
+            var btnCs = mask.Q<Button>("UI_Settings_BtnCs");
+            if (btnCs != null)
             {
-                _ = ShowDialogAsync("如有问题请联系客服邮箱：support@example.com\n或通过游戏内反馈渠道提交。", title: "联系客服");
-            };
-            card.Add(btnCs);
-
-            // 隐私协议
-            var btnPrivacy = new Button { text = "隐私协议", name = "UI_Settings_BtnPrivacy" };
-            StyleFullWidthButton(btnPrivacy, new Color(0.22f, 0.48f, 0.72f, 1f));
-            WireClickSfx(btnPrivacy);
-            btnPrivacy.clicked += () =>
+                WireClickSfx(btnCs);
+                btnCs.clicked += () =>
+                {
+                    _ = ShowDialogAsync("如有问题请联系客服邮箱：support@example.com\n或通过游戏内反馈渠道提交。", title: "联系客服");
+                };
+            }
+            var btnPrivacy = mask.Q<Button>("UI_Settings_BtnPrivacy");
+            if (btnPrivacy != null)
             {
-                _ = ShowDialogAsync(
-                    "我们重视您的隐私。本游戏会收集必要的账号与设备信息用于登录、存档与反作弊，不会向第三方出售个人数据。详细条款请以正式发布版本为准。",
-                    title: "隐私协议");
-            };
-            card.Add(btnPrivacy);
+                WireClickSfx(btnPrivacy);
+                btnPrivacy.clicked += () =>
+                {
+                    _ = ShowDialogAsync(
+                        "我们重视您的隐私。本游戏会收集必要的账号与设备信息用于登录、存档与反作弊，不会向第三方出售个人数据。详细条款请以正式发布版本为准。",
+                        title: "隐私协议");
+                };
+            }
 
-            // 客户端版本
             var ver = Application.version;
             if (string.IsNullOrEmpty(ver)) ver = "0.0.0";
-            var verLabel = new Label($"客户端版本：{ver}") { name = "UI_Settings_Version" };
-            verLabel.style.fontSize = 13;
-            verLabel.style.color = new Color(0.7f, 0.72f, 0.78f, 1f);
-            verLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            verLabel.style.marginTop = 10;
-            verLabel.style.marginBottom = 12;
-            card.Add(verLabel);
+            var verLabel = mask.Q<Label>("UI_Settings_Version");
+            if (verLabel != null) verLabel.text = $"客户端版本：{ver}";
 
-            // 关闭
-            var btnClose = new Button { text = "关闭", name = "UI_Settings_BtnClose" };
-            StyleFullWidthButton(btnClose, new Color(0.35f, 0.38f, 0.45f, 1f));
-            WireClickSfx(btnClose);
-            btnClose.clicked += () => mask.RemoveFromHierarchy();
-            card.Add(btnClose);
+            var btnClose = mask.Q<Button>("UI_Settings_BtnClose");
+            if (btnClose != null)
+            {
+                WireClickSfx(btnClose);
+                btnClose.clicked += () => mask.RemoveFromHierarchy();
+            }
 
-            // 点击遮罩关闭
             mask.RegisterCallback<ClickEvent>(evt =>
             {
                 if (evt.target == mask)
                     mask.RemoveFromHierarchy();
             });
 
-            mask.Add(card);
             _root.Add(mask);
             mask.BringToFront();
         }
@@ -836,7 +780,7 @@ namespace HotUpdate.UI
             return body.Substring(0, maxChars) + "…";
         }
 
-        async UniTask<VisualTreeAsset> LoadMailUxmlAsync(string assetName)
+        async UniTask<VisualTreeAsset> LoadPopupUxmlAsync(string assetName)
         {
             VisualTreeAsset vta = null;
 #if UNITY_EDITOR
@@ -864,7 +808,7 @@ namespace HotUpdate.UI
             _root.Q("UI_Mail")?.RemoveFromHierarchy();
             _root.Q("UI_MailDetail")?.RemoveFromHierarchy();
 
-            var vta = await LoadMailUxmlAsync("UI_Mail");
+            var vta = await LoadPopupUxmlAsync("UI_Mail");
             if (vta == null)
             {
                 Debug.LogError("[Mail] 加载 UI_Mail.uxml 失败");
@@ -873,7 +817,7 @@ namespace HotUpdate.UI
             }
 
             if (_mailItemTemplate == null)
-                _mailItemTemplate = await LoadMailUxmlAsync("UI_MailItem");
+                _mailItemTemplate = await LoadPopupUxmlAsync("UI_MailItem");
 
             var mask = vta.Instantiate();
             mask.name = "UI_Mail";
@@ -883,14 +827,14 @@ namespace HotUpdate.UI
             mask.style.right = 0;
             mask.style.top = 0;
             mask.style.bottom = 0;
-            mask.style.backgroundColor = new Color(0f, 0f, 0f, 0.72f);
+            mask.style.backgroundColor = PopupOverlayColor;
             mask.style.justifyContent = Justify.Center;
             mask.style.alignItems = Align.Center;
 
             var card = mask.Q("UI_Mail_Card");
             if (card != null)
             {
-                card.style.backgroundColor = new Color(0.11f, 0.125f, 0.17f, 1f);
+                card.style.backgroundColor = PopupCardColor;
                 card.pickingMode = PickingMode.Position;
             }
 
@@ -1285,7 +1229,7 @@ namespace HotUpdate.UI
             EnsureDoc();
             _root.Q("UI_MailDetail")?.RemoveFromHierarchy();
 
-            var vta = await LoadMailUxmlAsync("UI_MailDetail");
+            var vta = await LoadPopupUxmlAsync("UI_MailDetail");
             VisualElement root;
             if (vta != null)
             {
@@ -1857,84 +1801,29 @@ namespace HotUpdate.UI
         /// 进入关卡确认层（防误点）。确认后才回调 _onStartLevel。
         /// 不 Clear 整页；体力仍由通关上报接口扣除，无需新 API。
         /// </summary>
+        /// <summary>进关确认：走通用 Confirm（message + 是/否），不单独做 EnterConfirm 面板。</summary>
         void ShowEnterConfirm(int mapId, int levelId)
         {
-            var old = _root.Q("Home_EnterConfirm");
-            old?.RemoveFromHierarchy();
-
-            var mask = new VisualElement { name = "Home_EnterConfirm" };
-            mask.style.position = Position.Absolute;
-            mask.style.left = 0;
-            mask.style.right = 0;
-            mask.style.top = 0;
-            mask.style.bottom = 0;
-            mask.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
-            mask.style.justifyContent = Justify.Center;
-            mask.style.alignItems = Align.Center;
-
-            var card = new VisualElement { name = "EnterConfirm_Card" };
-            card.style.width = 320;
-            card.style.paddingTop = 24;
-            card.style.paddingBottom = 20;
-            card.style.paddingLeft = 20;
-            card.style.paddingRight = 20;
-            card.style.backgroundColor = new Color(0.16f, 0.18f, 0.24f, 1f);
-            card.style.borderTopLeftRadius = 12;
-            card.style.borderTopRightRadius = 12;
-            card.style.borderBottomLeftRadius = 12;
-            card.style.borderBottomRightRadius = 12;
-            card.style.alignItems = Align.Center;
-
-            var msg = new Label($"是否进入第 {levelId} 关？\n（消耗 {GameRuleConfig.EnergyCostPerLevel} 点体力）") { name = "EnterConfirm_Msg" };
-            msg.style.fontSize = 18;
-            msg.style.color = Color.white;
-            msg.style.unityTextAlign = TextAnchor.MiddleCenter;
-            msg.style.whiteSpace = WhiteSpace.Normal;
-            msg.style.marginBottom = 20;
-            card.Add(msg);
-
-            var row = new VisualElement { name = "EnterConfirm_Row" };
-            row.style.flexDirection = FlexDirection.Row;
-            row.style.justifyContent = Justify.Center;
-
-            var cancel = new Button { text = "取消", name = "EnterConfirm_Cancel" };
-            cancel.style.width = 110;
-            cancel.style.height = 42;
-            cancel.style.marginRight = 12;
-            cancel.style.backgroundColor = new Color(0.35f, 0.35f, 0.4f, 1f);
-            cancel.style.color = Color.white;
-            WireClickSfx(cancel);
-            cancel.clicked += () => mask.RemoveFromHierarchy();
-            row.Add(cancel);
-
-            var ok = new Button { text = "进入", name = "EnterConfirm_Ok" };
-            ok.style.width = 110;
-            ok.style.height = 42;
-            ok.style.backgroundColor = new Color(0.2f, 0.65f, 0.35f, 1f);
-            ok.style.color = Color.white;
-            int m = mapId, lv = levelId;
-            WireClickSfx(ok);
-            ok.clicked += () =>
-            {
-                mask.RemoveFromHierarchy();
-                Debug.Log($"[UI] confirm enter map={m} level={lv}");
-                if (_onStartLevel != null)
-                    _onStartLevel(m, lv).Forget();
-                else if (_onStartGame != null)
-                    _onStartGame().Forget();
-            };
-            row.Add(ok);
-
-            card.Add(row);
-            mask.Add(card);
-            _root.Add(mask);
-            mask.BringToFront();
+            ShowEnterConfirmAsync(mapId, levelId).Forget();
         }
 
-        /// <summary>
-        /// 不破坏当前界面的轻量 tip（用于关卡锁定等提示）。
-        /// </summary>
-        // IMatch3Hud 要求精确签名 ShowTip(string)
+        async UniTaskVoid ShowEnterConfirmAsync(int mapId, int levelId)
+        {
+            int cost = GameRuleConfig.EnergyCostPerLevel;
+            bool ok = await ShowConfirmAsync(
+                $"是否进入第 {levelId} 关？\n（消耗 {cost} 点体力）",
+                title: "进入关卡",
+                yesText: "进入",
+                noText: "取消");
+            if (!ok) return;
+
+            Debug.Log($"[UI] confirm enter map={mapId} level={levelId}");
+            if (_onStartLevel != null)
+                await _onStartLevel(mapId, levelId);
+            else if (_onStartGame != null)
+                await _onStartGame();
+        }
+
         public void ShowTip(string message) => ShowTip(message, 1.6f);
 
         public void ShowTip(string message, float seconds)

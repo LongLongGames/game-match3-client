@@ -1,0 +1,10 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <!-- 通用单按钮提示弹窗；遮罩与其它非全屏弹窗统一 0.55 黑透明 -->
+    <ui:VisualElement name="UI_Dialog" picking-mode="Position" style="position: absolute; left: 0; right: 0; top: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.55); justify-content: center; align-items: center;">
+        <ui:VisualElement name="UI_Dialog_Card" style="width: 340px; max-width: 90%; padding-top: 20px; padding-bottom: 18px; padding-left: 20px; padding-right: 20px; background-color: rgb(41, 46, 61); border-top-left-radius: 12px; border-top-right-radius: 12px; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; align-items: stretch;">
+            <ui:Label name="UI_Dialog_Title" text="提示" style="font-size: 20px; color: rgb(255, 255, 255); -unity-font-style: bold; -unity-text-align: middle-center; margin-bottom: 12px;" />
+            <ui:Label name="UI_Dialog_Body" text="" style="font-size: 16px; color: rgb(235, 237, 245); white-space: normal; -unity-text-align: middle-center; margin-bottom: 18px;" />
+            <ui:Button name="UI_Dialog_Ok" text="确定" style="height: 42px; font-size: 16px; background-color: rgb(64, 140, 242); color: rgb(255, 255, 255); border-top-left-radius: 8px; border-top-right-radius: 8px; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

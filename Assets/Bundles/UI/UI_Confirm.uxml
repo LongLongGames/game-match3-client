@@ -1,0 +1,13 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <!-- 是/否确认弹窗 -->
+    <ui:VisualElement name="UI_Confirm" picking-mode="Position" style="position: absolute; left: 0; right: 0; top: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.55); justify-content: center; align-items: center;">
+        <ui:VisualElement name="UI_Confirm_Card" style="width: 340px; max-width: 90%; padding-top: 20px; padding-bottom: 18px; padding-left: 20px; padding-right: 20px; background-color: rgb(41, 46, 61); border-top-left-radius: 12px; border-top-right-radius: 12px; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; align-items: stretch;">
+            <ui:Label name="UI_Confirm_Title" text="确认" style="font-size: 20px; color: rgb(255, 255, 255); -unity-font-style: bold; -unity-text-align: middle-center; margin-bottom: 12px;" />
+            <ui:Label name="UI_Confirm_Body" text="" style="font-size: 16px; color: rgb(235, 237, 245); white-space: normal; -unity-text-align: middle-center; margin-bottom: 18px;" />
+            <ui:VisualElement name="UI_Confirm_Row" style="flex-direction: row; justify-content: center;">
+                <ui:Button name="UI_Confirm_No" text="否" style="width: 120px; height: 42px; margin-right: 12px; font-size: 16px; background-color: rgb(89, 89, 102); color: rgb(255, 255, 255); border-top-left-radius: 8px; border-top-right-radius: 8px; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;" />
+                <ui:Button name="UI_Confirm_Yes" text="是" style="width: 120px; height: 42px; font-size: 16px; background-color: rgb(64, 140, 242); color: rgb(255, 255, 255); border-top-left-radius: 8px; border-top-right-radius: 8px; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
