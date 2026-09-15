@@ -1,17 +1,15 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
-    <!-- 设置弹窗 -->
+    <!-- 设置弹窗：音效开关竖排，避免 Toggle 横排出框 -->
     <ui:VisualElement name="UI_Settings" picking-mode="Position" style="position: absolute; left: 0; right: 0; top: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.55); justify-content: center; align-items: center;">
-        <ui:VisualElement name="UI_Settings_Card" style="width: 360px; max-width: 92%; padding-top: 20px; padding-bottom: 18px; padding-left: 20px; padding-right: 20px; background-color: rgb(41, 46, 61); border-top-left-radius: 12px; border-top-right-radius: 12px; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; align-items: stretch;">
+        <ui:VisualElement name="UI_Settings_Card" style="width: 360px; max-width: 92%; padding-top: 20px; padding-bottom: 18px; padding-left: 20px; padding-right: 20px; background-color: rgb(41, 46, 61); border-top-left-radius: 12px; border-top-right-radius: 12px; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; align-items: stretch; overflow: hidden;">
             <ui:Label name="UI_Settings_Title" text="设置" style="font-size: 20px; color: rgb(255, 255, 255); -unity-font-style: bold; -unity-text-align: middle-center; margin-bottom: 16px;" />
             <ui:VisualElement name="UI_Settings_NickRow" style="flex-direction: row; align-items: center; margin-bottom: 10px;">
-                <ui:Label name="UI_Settings_Nick" text="昵称：—" style="flex-grow: 1; font-size: 15px; color: rgb(230, 232, 240);" />
-                <ui:Button name="UI_Settings_BtnRename" text="改名" style="width: 72px; height: 32px; font-size: 13px; background-color: rgb(64, 140, 242); color: rgb(255, 255, 255); border-top-left-radius: 6px; border-top-right-radius: 6px; border-bottom-left-radius: 6px; border-bottom-right-radius: 6px;" />
+                <ui:Label name="UI_Settings_Nick" text="昵称：—" style="flex-grow: 1; flex-shrink: 1; font-size: 15px; color: rgb(230, 232, 240); overflow: hidden; text-overflow: ellipsis;" />
+                <ui:Button name="UI_Settings_BtnRename" text="改名" style="width: 72px; height: 32px; flex-shrink: 0; font-size: 13px; background-color: rgb(64, 140, 242); color: rgb(255, 255, 255); border-top-left-radius: 6px; border-top-right-radius: 6px; border-bottom-left-radius: 6px; border-bottom-right-radius: 6px;" />
             </ui:VisualElement>
-            <ui:Label name="UI_Settings_PlayerId" text="玩家ID：—" style="font-size: 13px; color: rgb(170, 175, 190); margin-bottom: 12px;" />
-            <ui:VisualElement name="UI_Settings_AudioRow" style="flex-direction: row; justify-content: space-between; margin-bottom: 8px;">
-                <ui:Toggle name="UI_Settings_Bgm" label="BGM" style="flex-grow: 1; color: rgb(230, 232, 240);" />
-                <ui:Toggle name="UI_Settings_Sfx" label="音效" style="flex-grow: 1; color: rgb(230, 232, 240);" />
-            </ui:VisualElement>
+            <ui:Label name="UI_Settings_PlayerId" text="玩家ID：—" style="font-size: 13px; color: rgb(170, 175, 190); margin-bottom: 12px; white-space: normal;" />
+            <ui:Toggle name="UI_Settings_Bgm" label="背景音乐" style="margin-bottom: 8px; color: rgb(230, 232, 240);" />
+            <ui:Toggle name="UI_Settings_Sfx" label="音效" style="margin-bottom: 12px; color: rgb(230, 232, 240);" />
             <ui:Button name="UI_Settings_BtnCs" text="联系客服" style="height: 40px; margin-bottom: 8px; font-size: 15px; background-color: rgb(56, 122, 184); color: rgb(255, 255, 255); border-top-left-radius: 8px; border-top-right-radius: 8px; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;" />
             <ui:Button name="UI_Settings_BtnPrivacy" text="隐私协议" style="height: 40px; margin-bottom: 8px; font-size: 15px; background-color: rgb(56, 122, 184); color: rgb(255, 255, 255); border-top-left-radius: 8px; border-top-right-radius: 8px; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;" />
             <ui:Label name="UI_Settings_Version" text="客户端版本：—" style="font-size: 13px; color: rgb(179, 184, 199); -unity-text-align: middle-center; margin-top: 10px; margin-bottom: 12px;" />

@@ -411,13 +411,17 @@ namespace HotUpdate.UI
             var bgmToggle = mask.Q<Toggle>("UI_Settings_Bgm");
             if (bgmToggle != null)
             {
+                bgmToggle.label = "背景音乐";
                 bgmToggle.value = _audio == null || _audio.BgmEnabled;
+                StyleSettingsToggle(bgmToggle);
                 bgmToggle.RegisterValueChangedCallback(evt => _audio?.SetBgmEnabled(evt.newValue));
             }
             var sfxToggle = mask.Q<Toggle>("UI_Settings_Sfx");
             if (sfxToggle != null)
             {
+                sfxToggle.label = "音效";
                 sfxToggle.value = _audio == null || _audio.SfxEnabled;
+                StyleSettingsToggle(sfxToggle);
                 sfxToggle.RegisterValueChangedCallback(evt => _audio?.SetSfxEnabled(evt.newValue));
             }
 
@@ -805,6 +809,7 @@ namespace HotUpdate.UI
         {
             EnsureDoc();
             EnsureMailMocks();
+            _root.Q("UI_Mail_Host")?.RemoveFromHierarchy();
             _root.Q("UI_Mail")?.RemoveFromHierarchy();
             _root.Q("UI_MailDetail")?.RemoveFromHierarchy();
 
@@ -820,16 +825,22 @@ namespace HotUpdate.UI
                 _mailItemTemplate = await LoadPopupUxmlAsync("UI_MailItem");
 
             var mask = vta.Instantiate();
-            mask.name = "UI_Mail";
-            // 强制实心底，防止样式丢失透出主页
+            mask.name = "UI_Mail_Host";
+            // 与 Settings 一致：外层透明，遮罩只在 UXML 根节点上画一次
             mask.style.position = Position.Absolute;
             mask.style.left = 0;
             mask.style.right = 0;
             mask.style.top = 0;
             mask.style.bottom = 0;
-            mask.style.backgroundColor = PopupOverlayColor;
-            mask.style.justifyContent = Justify.Center;
-            mask.style.alignItems = Align.Center;
+            mask.style.backgroundColor = Color.clear;
+            mask.style.flexGrow = 1;
+
+            var overlay = mask.Q<VisualElement>("UI_Mail");
+            if (overlay != null)
+            {
+                overlay.style.backgroundColor = PopupOverlayColor;
+                overlay.pickingMode = PickingMode.Position;
+            }
 
             var card = mask.Q("UI_Mail_Card");
             if (card != null)
@@ -879,7 +890,9 @@ namespace HotUpdate.UI
 
             mask.RegisterCallback<ClickEvent>(evt =>
             {
-                if (evt.target == mask)
+                // 点遮罩空白关闭（点到卡片不关）
+                var t = evt.target as VisualElement;
+                if (t != null && (t.name == "UI_Mail" || t == mask))
                     mask.RemoveFromHierarchy();
             });
 
