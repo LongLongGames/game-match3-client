@@ -431,7 +431,7 @@ namespace HotUpdate.UI
             WireClickSfx(btnRename);
             btnRename.clicked += () =>
             {
-                ShowToast("修改昵称功能即将开放");
+                ShowRenameNicknameDialog(nickLabel);
             };
             nickRow.Add(btnRename);
             card.Add(nickRow);
@@ -511,6 +511,134 @@ namespace HotUpdate.UI
             mask.Add(card);
             _root.Add(mask);
             mask.BringToFront();
+        }
+
+        /// <summary>改名弹窗：输入新昵称 → PUT /api/v1/user/profile</summary>
+        void ShowRenameNicknameDialog(Label nickLabel)
+        {
+            EnsureDoc();
+            _root.Q("UI_Rename")?.RemoveFromHierarchy();
+
+            var current = _player?.Profile?.nickname ?? "Player";
+
+            var mask = new VisualElement { name = "UI_Rename" };
+            mask.style.position = Position.Absolute;
+            mask.style.left = 0;
+            mask.style.right = 0;
+            mask.style.top = 0;
+            mask.style.bottom = 0;
+            mask.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
+            mask.style.justifyContent = Justify.Center;
+            mask.style.alignItems = Align.Center;
+            mask.pickingMode = PickingMode.Position;
+
+            var card = new VisualElement { name = "UI_Rename_Card" };
+            card.style.width = 340;
+            card.style.maxWidth = Length.Percent(90);
+            card.style.paddingTop = 20;
+            card.style.paddingBottom = 18;
+            card.style.paddingLeft = 20;
+            card.style.paddingRight = 20;
+            card.style.backgroundColor = new Color(0.16f, 0.18f, 0.24f, 1f);
+            card.style.borderTopLeftRadius = 12;
+            card.style.borderTopRightRadius = 12;
+            card.style.borderBottomLeftRadius = 12;
+            card.style.borderBottomRightRadius = 12;
+
+            var title = new Label("修改昵称");
+            title.style.fontSize = 20;
+            title.style.unityFontStyleAndWeight = FontStyle.Bold;
+            title.style.color = Color.white;
+            title.style.unityTextAlign = TextAnchor.MiddleCenter;
+            title.style.marginBottom = 14;
+            card.Add(title);
+
+            var field = new TextField { name = "UI_Rename_Input", value = current };
+            field.style.marginBottom = 14;
+            field.style.height = 36;
+            field.style.fontSize = 16;
+            card.Add(field);
+
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.justifyContent = Justify.Center;
+
+            var cancel = new Button { text = "取消" };
+            cancel.style.width = 120;
+            cancel.style.height = 42;
+            cancel.style.marginRight = 12;
+            cancel.style.fontSize = 16;
+            cancel.style.backgroundColor = new Color(0.4f, 0.42f, 0.48f, 1f);
+            cancel.style.color = Color.white;
+            cancel.style.borderTopLeftRadius = 8;
+            cancel.style.borderTopRightRadius = 8;
+            cancel.style.borderBottomLeftRadius = 8;
+            cancel.style.borderBottomRightRadius = 8;
+            WireClickSfx(cancel);
+            cancel.clicked += () => mask.RemoveFromHierarchy();
+            row.Add(cancel);
+
+            var ok = new Button { text = "确定" };
+            ok.style.width = 120;
+            ok.style.height = 42;
+            ok.style.fontSize = 16;
+            ok.style.backgroundColor = new Color(0.25f, 0.55f, 0.95f, 1f);
+            ok.style.color = Color.white;
+            ok.style.borderTopLeftRadius = 8;
+            ok.style.borderTopRightRadius = 8;
+            ok.style.borderBottomLeftRadius = 8;
+            ok.style.borderBottomRightRadius = 8;
+            WireClickSfx(ok);
+            ok.clicked += async () =>
+            {
+                var name = field.value?.Trim() ?? "";
+                if (string.IsNullOrEmpty(name))
+                {
+                    ShowToast("昵称不能为空");
+                    return;
+                }
+                if (name == current)
+                {
+                    mask.RemoveFromHierarchy();
+                    return;
+                }
+
+                ok.SetEnabled(false);
+                cancel.SetEnabled(false);
+                try
+                {
+                    if (_player == null)
+                    {
+                        ShowToast("玩家服务未就绪");
+                        return;
+                    }
+                    var (success, err) = await _player.UpdateNicknameAsync(name);
+                    if (success)
+                    {
+                        var n = _player.Profile?.nickname ?? name;
+                        if (nickLabel != null)
+                            nickLabel.text = $"昵称：{n}";
+                        mask.RemoveFromHierarchy();
+                        ShowToast("昵称已更新");
+                    }
+                    else
+                    {
+                        ShowToast(string.IsNullOrEmpty(err) ? "修改失败" : err);
+                    }
+                }
+                finally
+                {
+                    ok.SetEnabled(true);
+                    cancel.SetEnabled(true);
+                }
+            };
+            row.Add(ok);
+
+            card.Add(row);
+            mask.Add(card);
+            _root.Add(mask);
+            mask.BringToFront();
+            field.Focus();
         }
 
         static VisualElement MakeSettingsRow()

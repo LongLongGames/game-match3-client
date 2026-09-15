@@ -78,6 +78,47 @@ namespace HotUpdate.Services
             }
         }
 
+        public async UniTask<(bool ok, string error)> UpdateNicknameAsync(string nickname, CancellationToken ct = default)
+        {
+            nickname = (nickname ?? "").Trim();
+            if (string.IsNullOrEmpty(nickname))
+                return (false, "昵称不能为空");
+            if (nickname.Length > 32)
+                return (false, "昵称最多 32 个字符");
+
+            try
+            {
+                // 只序列化 game_id + nickname，避免 JsonUtility 带上 level=0
+                var body = new UpdateProfileRequest
+                {
+                    game_id = _config.GameId,
+                    nickname = nickname
+                };
+                var json = JsonUtility.ToJson(body);
+                var url = $"{_config.GameBaseUrl}/api/v1/user/profile";
+                var text = await _http.PutJsonAsync(url, json, auth: true, ct);
+                var p = JsonUtility.FromJson<PlayerProfile>(text);
+                if (p != null)
+                {
+                    Profile = p;
+                    if (string.IsNullOrEmpty(Profile.nickname))
+                        Profile.nickname = nickname;
+                }
+                else
+                {
+                    Profile.nickname = nickname;
+                }
+
+                Debug.Log($"[Player] nickname updated → {Profile.nickname}");
+                return (true, null);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[Player] UpdateNickname failed: " + e.Message);
+                return (false, e.Message);
+            }
+        }
+
         public async UniTask RefreshStateAsync(int mapId = 1, CancellationToken ct = default)
         {
             CurrentMapId = mapId < 1 ? 1 : mapId;

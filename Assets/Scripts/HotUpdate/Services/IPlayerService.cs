@@ -20,6 +20,9 @@ namespace HotUpdate.Services
         UniTask RefreshProfileAsync(CancellationToken ct = default);
         UniTask RefreshStateAsync(int mapId = 1, CancellationToken ct = default);
 
+        /// <summary>PUT /api/v1/user/profile 修改昵称。成功更新本地 Profile；失败返回 (false, msg)。</summary>
+        UniTask<(bool ok, string error)> UpdateNicknameAsync(string nickname, CancellationToken ct = default);
+
         /// <summary>
         /// 选下一关可玩关卡：(mapId, levelId)。体力不足或未解锁返回 false。
         /// </summary>

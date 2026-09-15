@@ -45,6 +45,14 @@ namespace HotUpdate.Network
         public string extra_json;
     }
 
+    /// <summary>PUT /api/v1/user/profile — 改昵称用（只含 game_id + nickname）。</summary>
+    [Serializable]
+    public class UpdateProfileRequest
+    {
+        public string game_id;
+        public string nickname;
+    }
+
     // ---------- Match3 进度 / 经济（与 server 对齐）----------
 
     [Serializable]
